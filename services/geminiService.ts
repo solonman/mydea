@@ -1,8 +1,15 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import type { RefinementData, InspirationCase, CreativeProposal, GeneratingStatus, CreativeType, ExecutionDetails } from '../types';
+import { handleError, validateBrief, logger, AppError, ErrorCodes } from '../utils/errors';
+import { withTimeoutAndRetry, isRetryableError } from '../utils/retry';
 
 if (!process.env.API_KEY) {
-  throw new Error("API_KEY environment variable not set");
+  throw new AppError(
+    "API_KEY environment variable not set",
+    ErrorCodes.API_KEY_INVALID,
+    "API 配置错误，请联系管理员",
+    false
+  );
 }
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -21,6 +28,13 @@ const PROPOSAL_SCHEMA = {
 
 
 export async function refineBrief(briefText: string, creativeType: string): Promise<RefinementData> {
+  // 验证输入
+  try {
+    validateBrief(briefText);
+  } catch (error) {
+    throw handleError(error);
+  }
+
   const model = 'gemini-2.5-flash';
   
   const prompt = `You are an expert advertising strategist. A user has provided an initial creative brief. Your task is to analyze it, provide a concise summary of your understanding in Chinese, and ask 2-3 critical clarifying questions in Chinese to gather the necessary details for generating high-quality creative ideas.
@@ -32,35 +46,50 @@ export async function refineBrief(briefText: string, creativeType: string): Prom
   `;
 
   try {
-    const response = await ai.models.generateContent({
-      model: model,
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            summary: {
-              type: Type.STRING,
-              description: "对用户需求的简要总结。",
-            },
-            questions: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING },
-              description: "向用户提出的澄清问题列表。",
+    logger.info('Refining brief', { briefText: briefText.substring(0, 50), creativeType });
+
+    const result = await withTimeoutAndRetry(
+      async () => {
+        const response = await ai.models.generateContent({
+          model: model,
+          contents: prompt,
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                summary: {
+                  type: Type.STRING,
+                  description: "对用户需求的简要总结。",
+                },
+                questions: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING },
+                  description: "向用户提出的澄清问题列表。",
+                },
+              },
+              required: ["summary", "questions"],
             },
           },
-          required: ["summary", "questions"],
-        },
-      },
-    });
+        });
 
-    const jsonText = response.text.trim();
-    return JSON.parse(jsonText) as RefinementData;
+        const jsonText = response.text.trim();
+        return JSON.parse(jsonText) as RefinementData;
+      },
+      {
+        timeoutMs: 30000,
+        maxRetries: 3,
+        delayMs: 1000,
+        shouldRetry: isRetryableError,
+      }
+    );
+
+    logger.info('Brief refinement successful');
+    return result;
 
   } catch (error) {
-    console.error("Error refining brief:", error);
-    throw new Error("Failed to get brief refinement from Gemini API.");
+    logger.error("Error refining brief", error as Error);
+    throw handleError(error);
   }
 }
 
@@ -76,33 +105,49 @@ async function getInspirations(refinedBrief: string): Promise<InspirationCase[]>
   `;
 
   try {
-    const response = await ai.models.generateContent({
-        model: model,
-        contents: prompt,
-        config: {
-            tools: [{ googleSearch: {} }],
-        },
-    });
+    logger.info('Fetching inspirations');
 
-    const jsonText = response.text.trim().replace(/^```json\s*|```\s*$/g, '');
-    const parsedInspirations = JSON.parse(jsonText) as {title: string; highlight: string;}[];
-    
-    const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-    
-    return parsedInspirations.slice(0, 3).map((insp, index) => {
-        const sourceUrl = (groundingChunks && groundingChunks[index]?.web?.uri) ? groundingChunks[index].web.uri : undefined;
-        return {
+    const result = await withTimeoutAndRetry(
+      async () => {
+        const response = await ai.models.generateContent({
+          model: model,
+          contents: prompt,
+          config: {
+            tools: [{ googleSearch: {} }],
+          },
+        });
+
+        const jsonText = response.text.trim().replace(/^```json\s*|```\s*$/g, '');
+        const parsedInspirations = JSON.parse(jsonText) as {title: string; highlight: string;}[];
+        
+        const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+        
+        return parsedInspirations.slice(0, 3).map((insp, index) => {
+          const sourceUrl = (groundingChunks && groundingChunks[index]?.web?.uri) ? groundingChunks[index].web.uri : undefined;
+          return {
             ...insp,
             imageUrl: `https://picsum.photos/seed/${encodeURIComponent(insp.title)}/600/400`,
             sourceUrl: sourceUrl,
-        }
-    });
+          }
+        });
+      },
+      {
+        timeoutMs: 45000, // 搜索需要更长时间
+        maxRetries: 2,
+        delayMs: 2000,
+        shouldRetry: isRetryableError,
+      }
+    );
+
+    logger.info('Inspirations fetched successfully', { count: result.length });
+    return result;
 
   } catch (error) {
-    console.error("Error getting inspirations:", error);
+    logger.error("Error getting inspirations", error as Error);
+    // 灵感获取失败不阻塞流程，返回默认数据
     return [
-        { title: "案例获取失败", highlight: "无法从网络获取灵感案例，这可能是网络问题或 API 限制。", imageUrl: "https://picsum.photos/seed/error1/600/400" },
-        { title: "请检查您的网络连接", highlight: "我们将继续为您生成创意方案，但缺少了外部灵感参考。", imageUrl: "https://picsum.photos/seed/error2/600/400" },
+      { title: "案例获取失败", highlight: "无法从网络获取灵感案例，这可能是网络问题或 API 限制。", imageUrl: "https://picsum.photos/seed/error1/600/400" },
+      { title: "请检查您的网络连接", highlight: "我们将继续为您生成创意方案，但缺少了外部灵感参考。", imageUrl: "https://picsum.photos/seed/error2/600/400" },
     ];
   }
 }
@@ -130,24 +175,39 @@ async function generateProposals(refinedBrief: string, inspirations: Inspiration
   `;
 
   try {
-    const response = await ai.models.generateContent({
-      model: model,
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: PROPOSAL_SCHEMA,
-        },
-      },
-    });
+    logger.info('Generating creative proposals', { briefLength: refinedBrief.length });
 
-    const jsonText = response.text.trim();
-    return JSON.parse(jsonText) as Omit<CreativeProposal, 'id' | 'version' | 'history' | 'isFinalized' | 'executionDetails'>[];
+    const result = await withTimeoutAndRetry(
+      async () => {
+        const response = await ai.models.generateContent({
+          model: model,
+          contents: prompt,
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.ARRAY,
+              items: PROPOSAL_SCHEMA,
+            },
+          },
+        });
+
+        const jsonText = response.text.trim();
+        return JSON.parse(jsonText) as Omit<CreativeProposal, 'id' | 'version' | 'history' | 'isFinalized' | 'executionDetails'>[];
+      },
+      {
+        timeoutMs: 60000, // 方案生成需要更长时间
+        maxRetries: 2,
+        delayMs: 2000,
+        shouldRetry: isRetryableError,
+      }
+    );
+
+    logger.info('Creative proposals generated successfully', { count: result.length });
+    return result;
 
   } catch (error) {
-    console.error("Error generating proposals:", error);
-    throw new Error("Failed to generate creative proposals from Gemini API.");
+    logger.error("Error generating proposals", error as Error);
+    throw handleError(error);
   }
 }
 
@@ -171,6 +231,16 @@ export async function optimizeProposal(
   feedback: string, 
   contextBrief: string
 ): Promise<Omit<CreativeProposal, 'id' | 'version' | 'history' | 'isFinalized' | 'executionDetails'>> {
+  // 验证输入
+  if (!feedback || feedback.trim().length === 0) {
+    throw new AppError(
+      'Feedback is empty',
+      ErrorCodes.VALIDATION_ERROR,
+      '优化意见不能为空',
+      false
+    );
+  }
+
   const model = 'gemini-2.5-pro';
 
   const prompt = `You are an expert advertising creative director tasked with refining a creative proposal based on user feedback.
@@ -194,20 +264,36 @@ export async function optimizeProposal(
   `;
   
   try {
-    const response = await ai.models.generateContent({
-      model: model,
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: PROPOSAL_SCHEMA,
-      },
-    });
+    logger.info('Optimizing proposal', { proposalId: originalProposal.id, feedbackLength: feedback.length });
 
-    const jsonText = response.text.trim();
-    return JSON.parse(jsonText) as Omit<CreativeProposal, 'id' | 'version' | 'history' | 'isFinalized' | 'executionDetails'>;
+    const result = await withTimeoutAndRetry(
+      async () => {
+        const response = await ai.models.generateContent({
+          model: model,
+          contents: prompt,
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: PROPOSAL_SCHEMA,
+          },
+        });
+
+        const jsonText = response.text.trim();
+        return JSON.parse(jsonText) as Omit<CreativeProposal, 'id' | 'version' | 'history' | 'isFinalized' | 'executionDetails'>;
+      },
+      {
+        timeoutMs: 45000,
+        maxRetries: 3,
+        delayMs: 1500,
+        shouldRetry: isRetryableError,
+      }
+    );
+
+    logger.info('Proposal optimized successfully');
+    return result;
+
   } catch (error) {
-    console.error("Error optimizing proposal:", error);
-    throw new Error("Failed to optimize creative proposal from Gemini API.");
+    logger.error("Error optimizing proposal", error as Error);
+    throw handleError(error);
   }
 }
 
@@ -255,27 +341,42 @@ export async function generateExecutionPlan(
   `;
 
   try {
-    const response = await ai.models.generateContent({
-      model,
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            title: { type: Type.STRING },
-            content: { type: Type.STRING },
-          },
-          required: ["title", "content"],
-        },
-      },
-    });
+    logger.info('Generating execution plan', { proposalId: finalProposal.id, creativeType });
 
-    const jsonText = response.text.trim();
-    return JSON.parse(jsonText) as ExecutionDetails;
+    const result = await withTimeoutAndRetry(
+      async () => {
+        const response = await ai.models.generateContent({
+          model,
+          contents: prompt,
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                title: { type: Type.STRING },
+                content: { type: Type.STRING },
+              },
+              required: ["title", "content"],
+            },
+          },
+        });
+
+        const jsonText = response.text.trim();
+        return JSON.parse(jsonText) as ExecutionDetails;
+      },
+      {
+        timeoutMs: 60000, // 执行计划生成需要更长时间
+        maxRetries: 2,
+        delayMs: 2000,
+        shouldRetry: isRetryableError,
+      }
+    );
+
+    logger.info('Execution plan generated successfully');
+    return result;
 
   } catch(error) {
-    console.error("Error generating execution plan:", error);
-    throw new Error("Failed to generate execution plan from Gemini API.");
+    logger.error("Error generating execution plan", error as Error);
+    throw handleError(error);
   }
 }
