@@ -11,9 +11,11 @@ interface HomeScreenProps {
   onCreateProject: (projectName: string) => Project;
   onBriefSubmit: (brief: Brief, projectId: string) => void;
   isLoading: boolean;
+  activeProjectId?: string | null; // 从外部传入的项目ID
+  isProjectLocked?: boolean; // 是否锁定项目选择（从项目详情页进来时为true）
 }
 
-const HomeScreen: React.FC<HomeScreenProps> = ({ user, supabaseUser, onCreateProject, onBriefSubmit, isLoading }) => {
+const HomeScreen: React.FC<HomeScreenProps> = ({ user, supabaseUser, onCreateProject, onBriefSubmit, isLoading, activeProjectId, isProjectLocked = false }) => {
   // Use Supabase projects if available, otherwise fall back to localStorage
   const {
     projects: supabaseProjects,
@@ -32,14 +34,18 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, supabaseUser, onCreatePro
 
   // Set default project on load
   useEffect(() => {
-    if (projects && projects.length > 0) {
+    // 优先使用传入的 activeProjectId
+    if (activeProjectId && projects && projects.some(p => p.id === activeProjectId)) {
+      setSelectedProjectId(activeProjectId);
+      setShowNewProjectInput(false);
+    } else if (projects && projects.length > 0) {
       setSelectedProjectId(projects[0].id);
       setShowNewProjectInput(false);
     } else {
       setSelectedProjectId('new');
       setShowNewProjectInput(true); // Show input by default if no projects exist
     }
-  }, [projects]);
+  }, [projects, activeProjectId]);
 
   const handleProjectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const value = e.target.value;
@@ -201,7 +207,36 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, supabaseUser, onCreatePro
         }}>
           准备好激发下一个绝妙创意了吗？
         </p>
-        {hasSupabase && (
+        {user.role === 'admin' && (
+          <div style={{ marginTop: '12px', display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
+            {hasSupabase && (
+              <span className="badge-success">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="6" cy="6" r="5" fill="currentColor"/>
+                </svg>
+                已连接 Supabase
+              </span>
+            )}
+            <span style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '4px 12px',
+              background: 'rgba(239, 68, 68, 0.1)',
+              border: '1px solid rgba(239, 68, 68, 0.2)',
+              borderRadius: '20px',
+              color: '#EF4444',
+              fontSize: '12px',
+              fontWeight: '500'
+            }}>
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M6 1L7.5 4.5L11 5L8.5 7.5L9 11L6 9L3 11L3.5 7.5L1 5L4.5 4.5L6 1Z" fill="currentColor"/>
+              </svg>
+              管理员
+            </span>
+          </div>
+        )}
+        {hasSupabase && user.role === 'admin' && (
           <div style={{ marginTop: '12px' }}>
             <span className="badge-success">
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -232,10 +267,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, supabaseUser, onCreatePro
           id="project-select"
           value={selectedProjectId}
           onChange={handleProjectChange}
-          disabled={projectsLoading}
+          disabled={projectsLoading || isProjectLocked}
           className="input-modern"
           style={{
-            cursor: projectsLoading ? 'not-allowed' : 'pointer',
+            cursor: projectsLoading || isProjectLocked ? 'not-allowed' : 'pointer',
+            opacity: isProjectLocked ? 0.7 : 1,
             paddingRight: '40px',
             appearance: 'none',
             backgroundImage: `url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%239CA3AF' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
@@ -281,16 +317,28 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, supabaseUser, onCreatePro
               onKeyDown={(e) => e.key === 'Enter' && handleCreateProject()}
               disabled={projectsLoading}
             />
-            {selectedProjectId === 'new' && (
-              <button 
-                onClick={handleCreateProject}
-                disabled={projectsLoading || !newProjectName.trim()}
-                className="btn-primary"
-                style={{ padding: '12px 24px', whiteSpace: 'nowrap' }}
-              >
-                {projectsLoading ? '创建中...' : '创建'}
-              </button>
-            )}
+            <button 
+              onClick={handleCreateProject}
+              disabled={projectsLoading || !newProjectName.trim()}
+              className="btn-primary"
+              style={{ padding: '12px 24px', whiteSpace: 'nowrap' }}
+            >
+              {projectsLoading ? '创建中...' : '创建'}
+            </button>
+            <button 
+              onClick={() => {
+                setShowNewProjectInput(false);
+                setNewProjectName('');
+                if (projects && projects.length > 0) {
+                  setSelectedProjectId(projects[0].id);
+                }
+              }}
+              disabled={projectsLoading}
+              className="btn-secondary"
+              style={{ padding: '12px 24px', whiteSpace: 'nowrap' }}
+            >
+              取消
+            </button>
           </div>
         </div>
       )}

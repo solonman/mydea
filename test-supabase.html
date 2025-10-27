@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Supabase 连接测试</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #1a1a1a;
+      color: #fff;
+    }
+    .result {
+      background: #2a2a2a;
+      padding: 20px;
+      border-radius: 8px;
+      margin: 10px 0;
+    }
+    .success { color: #4ade80; }
+    .error { color: #f87171; }
+    button {
+      background: #3b82f6;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 5px;
+      cursor: pointer;
+      margin: 5px;
+    }
+    button:hover { background: #2563eb; }
+  </style>
+</head>
+<body>
+  <h1>🔍 Supabase 连接测试</h1>
+  
+  <div class="result">
+    <h3>环境变量检查：</h3>
+    <p id="env-check">检查中...</p>
+  </div>
+
+  <div class="result">
+    <h3>连接测试：</h3>
+    <button onclick="testConnection()">测试连接</button>
+    <p id="connection-result"></p>
+  </div>
+
+  <div class="result">
+    <h3>注册测试：</h3>
+    <input type="email" id="test-email" placeholder="测试邮箱" style="padding: 8px; margin: 5px;">
+    <input type="password" id="test-password" placeholder="密码(至少6位)" style="padding: 8px; margin: 5px;">
+    <button onclick="testSignup()">测试注册</button>
+    <p id="signup-result"></p>
+  </div>
+
+  <script type="module">
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+    // 环境变量
+    const SUPABASE_URL = 'https://fczrwricafdkncwlgzof.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjenJ3cmljYWZka25jd2xnem9mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE0MDUxOTIsImV4cCI6MjA3Njk4MTE5Mn0.F1O38F1Cp2xcFeVCMKBIO1sd3AYT1uL3z_dCOaS76ws';
+
+    // 创建客户端
+    window.supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // 检查环境变量
+    const envCheck = document.getElementById('env-check');
+    if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+      envCheck.innerHTML = '<span class="success">✅ 环境变量配置正确</span><br>' +
+        `URL: ${SUPABASE_URL}<br>` +
+        `Key: ${SUPABASE_ANON_KEY.substring(0, 30)}...`;
+    } else {
+      envCheck.innerHTML = '<span class="error">❌ 环境变量缺失</span>';
+    }
+
+    // 测试连接
+    window.testConnection = async function() {
+      const result = document.getElementById('connection-result');
+      result.innerHTML = '测试中...';
+      
+      try {
+        const { data, error } = await window.supabase.auth.getSession();
+        
+        if (error) {
+          result.innerHTML = `<span class="error">❌ 连接失败: ${error.message}</span>`;
+        } else {
+          result.innerHTML = '<span class="success">✅ 连接成功！</span><br>' +
+            `Session: ${data.session ? '已登录' : '未登录'}`;
+        }
+      } catch (e) {
+        result.innerHTML = `<span class="error">❌ 网络错误: ${e.message}</span>`;
+      }
+    };
+
+    // 测试注册
+    window.testSignup = async function() {
+      const result = document.getElementById('signup-result');
+      const email = document.getElementById('test-email').value;
+      const password = document.getElementById('test-password').value;
+      
+      if (!email || !password) {
+        result.innerHTML = '<span class="error">请填写邮箱和密码</span>';
+        return;
+      }
+      
+      result.innerHTML = '注册中...';
+      
+      try {
+        const { data, error } = await window.supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              username: 'testuser'
+            }
+          }
+        });
+        
+        if (error) {
+          result.innerHTML = `<span class="error">❌ 注册失败: ${error.message}</span>`;
+        } else {
+          result.innerHTML = '<span class="success">✅ 注册成功！</span><br>' +
+            `用户ID: ${data.user?.id}<br>` +
+            `邮箱验证: ${data.user?.email_confirmed_at ? '已验证' : '待验证'}`;
+        }
+      } catch (e) {
+        result.innerHTML = `<span class="error">❌ 网络错误: ${e.message}</span>`;
+      }
+    };
+
+    // 自动测试连接
+    window.testConnection();
+  </script>
+</body>
+</html>

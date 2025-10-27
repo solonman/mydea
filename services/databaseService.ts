@@ -21,15 +21,26 @@ export function getUser(username: string): User | null {
   return db[username] || null;
 }
 
-export function createUser(username: string): User {
+export function createUser(username: string, role: 'user' | 'admin' = 'user'): User {
   const db = getDb();
   if (db[username]) {
     throw new Error('User already exists');
   }
-  const newUser: User = { username, projects: [] };
+  const newUser: User = { username, projects: [], role };
   db[username] = newUser;
   saveDb(db);
   return newUser;
+}
+
+export function setUserRole(username: string, role: 'user' | 'admin'): User {
+  const db = getDb();
+  const user = db[username];
+  if (!user) throw new Error('User not found');
+  
+  user.role = role;
+  saveDb(db);
+  setSessionUser(user);
+  return user;
 }
 
 // --- Session Management ---

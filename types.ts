@@ -64,7 +64,10 @@ export interface Project {
   briefs: BriefHistoryItem[];
 }
 
+export type UserRole = 'user' | 'admin';
+
 export interface User {
     username: string;
     projects: Project[];
+    role?: UserRole; // 用户角色，默认为普通用户
 }

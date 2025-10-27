@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mydea 管理员设置</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #1a1a1a;
+      color: #fff;
+    }
+    h1 {
+      background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .card {
+      background: #2a2a2a;
+      padding: 20px;
+      border-radius: 12px;
+      margin: 20px 0;
+      border: 1px solid #3a3a3a;
+    }
+    input {
+      width: 100%;
+      padding: 10px;
+      margin: 10px 0;
+      background: #1a1a1a;
+      border: 1px solid #4a4a4a;
+      border-radius: 6px;
+      color: #fff;
+      font-size: 14px;
+    }
+    button {
+      background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      width: 100%;
+      margin-top: 10px;
+    }
+    button:hover {
+      background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
+    }
+    .success { color: #10B981; }
+    .error { color: #EF4444; }
+    .info { color: #60A5FA; }
+    .user-list {
+      max-height: 300px;
+      overflow-y: auto;
+      margin-top: 10px;
+    }
+    .user-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px;
+      margin: 5px 0;
+      background: #1a1a1a;
+      border-radius: 6px;
+      border: 1px solid #3a3a3a;
+    }
+    .badge {
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .badge-admin {
+      background: rgba(239, 68, 68, 0.2);
+      color: #EF4444;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+    .badge-user {
+      background: rgba(59, 130, 246, 0.2);
+      color: #60A5FA;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+    .btn-small {
+      padding: 6px 12px;
+      font-size: 12px;
+      width: auto;
+      margin: 0 5px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🔑 管理员设置工具</h1>
+  
+  <div class="card">
+    <h3>当前所有用户</h3>
+    <div id="user-list" class="user-list">
+      <p class="info">加载中...</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>设置管理员</h3>
+    <input type="text" id="username" placeholder="输入用户名">
+    <button onclick="setAdmin()">设为管理员</button>
+    <button onclick="setUser()" style="background: linear-gradient(135deg, #6B7280 0%, #4B5563 100%);">设为普通用户</button>
+    <p id="result" style="margin-top: 15px;"></p>
+  </div>
+
+  <div class="card">
+    <h3>快速设置</h3>
+    <p class="info" style="font-size: 13px;">将当前登录用户设为管理员</p>
+    <button onclick="setCurrentUserAsAdmin()">设置当前用户为管理员</button>
+    <p id="quick-result" style="margin-top: 15px;"></p>
+  </div>
+
+  <script>
+    const DB_KEY = 'mydea_db';
+    const SESSION_KEY = 'mydea_session';
+
+    function getDb() {
+      const dbString = localStorage.getItem(DB_KEY);
+      return dbString ? JSON.parse(dbString) : {};
+    }
+
+    function saveDb(db) {
+      localStorage.setItem(DB_KEY, JSON.stringify(db));
+    }
+
+    function displayUsers() {
+      const db = getDb();
+      const userList = document.getElementById('user-list');
+      
+      if (Object.keys(db).length === 0) {
+        userList.innerHTML = '<p class="info">暂无用户</p>';
+        return;
+      }
+
+      let html = '';
+      Object.values(db).forEach(user => {
+        const role = user.role || 'user';
+        const badgeClass = role === 'admin' ? 'badge-admin' : 'badge-user';
+        const badgeText = role === 'admin' ? '管理员' : '普通用户';
+        
+        html += `
+          <div class="user-item">
+            <div>
+              <strong>${user.username}</strong>
+              <span class="badge ${badgeClass}" style="margin-left: 10px;">${badgeText}</span>
+            </div>
+            <div>
+              <button class="btn-small" onclick="changeUserRole('${user.username}', 'admin')">设为管理员</button>
+              <button class="btn-small" onclick="changeUserRole('${user.username}', 'user')" 
+                style="background: #6B7280;">设为普通用户</button>
+            </div>
+          </div>
+        `;
+      });
+      
+      userList.innerHTML = html;
+    }
+
+    // 用户列表中的按钮调用，带反馈
+    function changeUserRole(username, role) {
+      const success = setUserRole(username, role);
+      if (success) {
+        const roleText = role === 'admin' ? '管理员' : '普通用户';
+        // 可以选择显示短暂的提示，或者只是静默更新
+        // alert(`✅ 成功将 ${username} 设为${roleText}`);
+      }
+    }
+
+    function setUserRole(username, role) {
+      const db = getDb();
+      const user = db[username];
+      
+      if (!user) {
+        return false; // 返回 false 表示失败
+      }
+
+      user.role = role;
+      saveDb(db);
+      
+      // 如果是当前登录用户，更新 session
+      const sessionUser = localStorage.getItem(SESSION_KEY);
+      if (sessionUser) {
+        const currentUser = JSON.parse(sessionUser);
+        if (currentUser.username === username) {
+          currentUser.role = role;
+          localStorage.setItem(SESSION_KEY, JSON.stringify(currentUser));
+        }
+      }
+      
+      displayUsers();
+      return true; // 返回 true 表示成功
+    }
+
+    function setAdmin() {
+      const username = document.getElementById('username').value.trim();
+      const result = document.getElementById('result');
+      
+      if (!username) {
+        result.innerHTML = '<span class="error">❌ 请输入用户名</span>';
+        return;
+      }
+      
+      const success = setUserRole(username, 'admin');
+      if (success) {
+        result.innerHTML = `<span class="success">✅ 成功将 ${username} 设为管理员</span>`;
+        document.getElementById('username').value = '';
+      } else {
+        result.innerHTML = `<span class="error">❌ 用户 ${username} 不存在</span>`;
+      }
+    }
+
+    function setUser() {
+      const username = document.getElementById('username').value.trim();
+      const result = document.getElementById('result');
+      
+      if (!username) {
+        result.innerHTML = '<span class="error">❌ 请输入用户名</span>';
+        return;
+      }
+      
+      const success = setUserRole(username, 'user');
+      if (success) {
+        result.innerHTML = `<span class="success">✅ 成功将 ${username} 设为普通用户</span>`;
+        document.getElementById('username').value = '';
+      } else {
+        result.innerHTML = `<span class="error">❌ 用户 ${username} 不存在</span>`;
+      }
+    }
+
+    function setCurrentUserAsAdmin() {
+      const result = document.getElementById('quick-result');
+      const sessionUser = localStorage.getItem(SESSION_KEY);
+      
+      if (!sessionUser) {
+        result.innerHTML = '<span class="error">❌ 当前无登录用户</span>';
+        return;
+      }
+      
+      const currentUser = JSON.parse(sessionUser);
+      setUserRole(currentUser.username, 'admin');
+      result.innerHTML = `<span class="success">✅ 成功将当前用户 ${currentUser.username} 设为管理员！请刷新页面查看效果。</span>`;
+    }
+
+    // 页面加载时显示用户列表
+    displayUsers();
+  </script>
+</body>
+</html>

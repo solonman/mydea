@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>创建测试用户</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #1a1a1a;
+      color: #fff;
+    }
+    h1 {
+      background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .card {
+      background: #2a2a2a;
+      padding: 20px;
+      border-radius: 12px;
+      margin: 20px 0;
+      border: 1px solid #3a3a3a;
+    }
+    input {
+      width: 100%;
+      padding: 12px;
+      margin: 10px 0;
+      background: #1a1a1a;
+      border: 1px solid #4a4a4a;
+      border-radius: 6px;
+      color: #fff;
+      font-size: 14px;
+    }
+    button {
+      background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      width: 100%;
+      margin-top: 10px;
+    }
+    button:hover {
+      background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
+    }
+    .success { color: #10B981; }
+    .error { color: #EF4444; }
+    .info { color: #60A5FA; }
+  </style>
+</head>
+<body>
+  <h1>👤 创建测试用户</h1>
+  
+  <div class="card">
+    <h3>快速创建管理员账号</h3>
+    <p class="info" style="font-size: 13px;">这将创建一个测试管理员账号并自动登录</p>
+    <button onclick="createAdminUser()">创建管理员账号 (admin)</button>
+    <p id="quick-result" style="margin-top: 15px;"></p>
+  </div>
+
+  <div class="card">
+    <h3>自定义创建用户</h3>
+    <input type="text" id="username" placeholder="用户名" value="testuser">
+    <select id="role" style="width: 100%; padding: 12px; margin: 10px 0; background: #1a1a1a; border: 1px solid #4a4a4a; border-radius: 6px; color: #fff;">
+      <option value="user">普通用户</option>
+      <option value="admin">管理员</option>
+    </select>
+    <button onclick="createCustomUser()">创建用户</button>
+    <p id="custom-result" style="margin-top: 15px;"></p>
+  </div>
+
+  <script>
+    const DB_KEY = 'mydea_db';
+    const SESSION_KEY = 'mydea_session';
+
+    function getDb() {
+      const dbString = localStorage.getItem(DB_KEY);
+      return dbString ? JSON.parse(dbString) : {};
+    }
+
+    function saveDb(db) {
+      localStorage.setItem(DB_KEY, JSON.stringify(db));
+    }
+
+    function createUser(username, role = 'user') {
+      const db = getDb();
+      
+      if (db[username]) {
+        return { success: false, message: '用户已存在' };
+      }
+
+      const newUser = {
+        username: username,
+        projects: [],
+        role: role
+      };
+
+      db[username] = newUser;
+      saveDb(db);
+      
+      // 设置为当前登录用户
+      localStorage.setItem(SESSION_KEY, JSON.stringify(newUser));
+      
+      return { success: true, user: newUser };
+    }
+
+    function createAdminUser() {
+      const result = document.getElementById('quick-result');
+      const response = createUser('admin', 'admin');
+      
+      if (response.success) {
+        result.innerHTML = '<span class="success">✅ 管理员账号创建成功！<br>用户名: admin<br>角色: 管理员<br><br>请刷新主应用页面 (localhost:3000)</span>';
+      } else {
+        result.innerHTML = `<span class="error">❌ ${response.message}</span>`;
+      }
+    }
+
+    function createCustomUser() {
+      const username = document.getElementById('username').value.trim();
+      const role = document.getElementById('role').value;
+      const result = document.getElementById('custom-result');
+      
+      if (!username) {
+        result.innerHTML = '<span class="error">❌ 请输入用户名</span>';
+        return;
+      }
+
+      const response = createUser(username, role);
+      
+      if (response.success) {
+        const roleText = role === 'admin' ? '管理员' : '普通用户';
+        result.innerHTML = `<span class="success">✅ 用户创建成功！<br>用户名: ${username}<br>角色: ${roleText}<br><br>请刷新主应用页面 (localhost:3000)</span>`;
+        document.getElementById('username').value = '';
+      } else {
+        result.innerHTML = `<span class="error">❌ ${response.message}</span>`;
+      }
+    }
+  </script>
+</body>
+</html>

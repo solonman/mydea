@@ -3,16 +3,18 @@ import type { RefinementData, InspirationCase, CreativeProposal, GeneratingStatu
 import { handleError, validateBrief, logger, AppError, ErrorCodes } from '../utils/errors';
 import { withTimeoutAndRetry, isRetryableError } from '../utils/retry';
 
-if (!process.env.API_KEY) {
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+
+if (!apiKey) {
   throw new AppError(
-    "API_KEY environment variable not set",
+    "VITE_GEMINI_API_KEY environment variable not set",
     ErrorCodes.API_KEY_INVALID,
-    "API 配置错误，请联系管理员",
+    "API 配置错误，请检查环境变量配置",
     false
   );
 }
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const ai = new GoogleGenAI({ apiKey });
 
 const PROPOSAL_SCHEMA = {
   type: Type.OBJECT,

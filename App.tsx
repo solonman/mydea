@@ -31,6 +31,7 @@ const App: React.FC = () => {
   
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [activeBriefId, setActiveBriefId] = useState<string | null>(null);
+  const [returnToProjectId, setReturnToProjectId] = useState<string | null>(null); // 记录需要返回的项目 ID
 
   const [currentRun, setCurrentRun] = useState<Partial<BriefHistoryItem> | null>(null);
   const [refinementData, setRefinementData] = useState<RefinementData | null>(null);
@@ -100,6 +101,7 @@ const App: React.FC = () => {
     setRefinementData(null);
     setError(null);
     setIsLoading(false);
+    setReturnToProjectId(null); // 清除返回项目 ID
   };
   
   // 自动登录（从认证会话恢复）
@@ -253,8 +255,8 @@ const App: React.FC = () => {
 
   const handleStartNewBriefFromProject = (projectId: string) => {
     setActiveProjectId(projectId);
-    // This flow is now handled by the home screen
-    handleBackToHome();
+    setReturnToProjectId(projectId); // 记录返回的项目 ID
+    setStage(Stage.HOME);
   };
 
   const handleBriefSubmit = useCallback(async (submittedBrief: Brief, projectId: string) => {
@@ -442,8 +444,22 @@ const App: React.FC = () => {
   };
 
   const handleBackToHome = () => {
-    resetState();
-    setStage(Stage.HOME);
+    // 如果当前在项目详情页，返回到项目列表
+    if (stage === Stage.PROJECT_DETAILS) {
+      setActiveProjectId(null);
+      setStage(Stage.PROJECT_DASHBOARD);
+      return;
+    }
+    
+    // 如果有返回项目 ID，返回到项目详情页
+    if (returnToProjectId) {
+      setActiveProjectId(returnToProjectId);
+      setStage(Stage.PROJECT_DETAILS);
+      setReturnToProjectId(null);
+    } else {
+      resetState();
+      setStage(Stage.HOME);
+    }
   }
 
   const renderContent = () => {
@@ -466,7 +482,7 @@ const App: React.FC = () => {
           isLoading={isLoading} 
         />;
       case Stage.HOME:
-        return currentUser && <HomeScreen user={currentUser} supabaseUser={supabaseUser} onCreateProject={handleCreateProject} onBriefSubmit={handleBriefSubmit} isLoading={isLoading}/>;
+        return currentUser && <HomeScreen user={currentUser} supabaseUser={supabaseUser} onCreateProject={handleCreateProject} onBriefSubmit={handleBriefSubmit} isLoading={isLoading} activeProjectId={activeProjectId} isProjectLocked={!!returnToProjectId} />;
       case Stage.PROJECT_DASHBOARD:
         return currentUser && <ProjectDashboard user={currentUser} supabaseUser={supabaseUser} onCreateProject={handleCreateProject} onViewProject={handleViewProject} />;
       case Stage.PROJECT_DETAILS:
@@ -512,8 +528,8 @@ const App: React.FC = () => {
   return (
     <div className="bg-gray-900 min-h-screen text-white flex flex-col items-center p-4 sm:p-6 lg:p-8">
       <div className="w-full max-w-5xl mx-auto">
-        {showHeader && <Header onNavigateToDashboard={handleNavigateToDashboard} onLogout={handleLogout} onBackToHome={handleBackToHome} currentStage={stage} user={currentUser} />}
-        <main className="mt-8">
+        {showHeader && <Header onNavigateToDashboard={handleNavigateToDashboard} onLogout={handleLogout} onBackToHome={handleBackToHome} currentStage={stage} user={currentUser} returnToProjectId={returnToProjectId} />}
+        <main className={showHeader ? "" : "mt-8"}>
           {renderContent()}
         </main>
       </div>

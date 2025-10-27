@@ -246,22 +246,75 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, supabaseUser, 
                             display: 'inline-flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            width: '64px',
-                            height: '64px',
-                            borderRadius: '16px',
-                            background: 'rgba(59, 130, 246, 0.1)',
-                            marginBottom: '16px'
+                            width: '80px',
+                            height: '80px',
+                            borderRadius: '20px',
+                            background: 'linear-gradient(135deg, rgba(107, 114, 128, 0.1) 0%, rgba(75, 85, 99, 0.05) 100%)',
+                            marginBottom: '20px'
                         }}>
-                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M12 6V12M12 12V18M12 12H18M12 12H6" stroke="#3B82F6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                            {/* 空文件夹图标 */}
+                            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M3 7C3 5.89543 3.89543 5 5 5H9L11 7H19C20.1046 7 21 7.89543 21 9V18C21 19.1046 20.1046 20 19 20H5C3.89543 20 3 19.1046 3 18V7Z" 
+                                    stroke="#9CA3AF" 
+                                    strokeWidth="2" 
+                                    strokeLinecap="round" 
+                                    strokeLinejoin="round"
+                                />
+                                {/* 文件夹内部的虚线，表示空 */}
+                                <path d="M8 13H16M8 16H13" 
+                                    stroke="#9CA3AF" 
+                                    strokeWidth="1.5" 
+                                    strokeLinecap="round" 
+                                    strokeDasharray="2 2"
+                                    opacity="0.4"
+                                />
                             </svg>
                         </div>
-                        <h3 style={{ fontSize: '18px', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                            该项目下暂无创意任务
+                        <h3 style={{ 
+                            fontSize: '20px', 
+                            fontWeight: '600', 
+                            color: 'var(--text-primary)', 
+                            marginBottom: '12px',
+                            letterSpacing: '-0.01em'
+                        }}>
+                            还没有创意任务
                         </h3>
-                        <p style={{ fontSize: '14px', color: 'var(--text-tertiary)' }}>
-                            点击“开启新创意”来开始吧！
+                        <p style={{ 
+                            fontSize: '15px', 
+                            color: 'var(--text-secondary)',
+                            marginBottom: '24px',
+                            lineHeight: '1.6'
+                        }}>
+                            点击右上角的 <span style={{ 
+                                color: '#60A5FA',
+                                fontWeight: '500',
+                                padding: '2px 8px',
+                                background: 'rgba(59, 130, 246, 0.1)',
+                                borderRadius: '4px'
+                            }}>“+ 开启新创意”</span> 按钮开始创作！
                         </p>
+                        <div style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: '8px 16px',
+                            background: 'rgba(59, 130, 246, 0.05)',
+                            border: '1px solid rgba(59, 130, 246, 0.2)',
+                            borderRadius: '8px',
+                            fontSize: '13px',
+                            color: 'var(--text-tertiary)'
+                        }}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M13 16H12V12H11M12 8H12.01M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" 
+                                    stroke="#60A5FA" 
+                                    strokeWidth="2" 
+                                    strokeLinecap="round" 
+                                    strokeLinejoin="round"
+                                    opacity="0.5"
+                                />
+                            </svg>
+                            每个项目可以包含多个创意任务
+                        </div>
                     </div>
                 )}
             </div>

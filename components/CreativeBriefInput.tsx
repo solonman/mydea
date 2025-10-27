@@ -24,7 +24,7 @@ const CreativeBriefInput: React.FC<CreativeBriefInputProps> = ({ onSubmit, isLoa
   const maxChars = 500;
 
   return (
-    <div className="w-full max-w-2xl mx-auto">
+    <div className="w-full">
       <div className="card-glass animate-fade-in" style={{ padding: '32px' }}>
         <form onSubmit={handleSubmit}>
           <div style={{ marginBottom: '24px' }}>
