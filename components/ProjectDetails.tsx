@@ -1,5 +1,6 @@
 import React from 'react';
 import type { Project, BriefHistoryItem } from '../types';
+import { useLanguage } from '../i18n/useLanguage';
 import { useBriefs, useSingleProject } from '../hooks';
 import type { User as SupabaseUser } from '../services/supabase';
 
@@ -12,6 +13,7 @@ interface ProjectDetailsProps {
 }
 
 const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, supabaseUser, onStartNewBrief, onViewBrief, onDeleteBrief }) => {
+    const { t } = useLanguage();
     // Use Supabase project if available
     const {
         project: supabaseProject,
@@ -133,7 +135,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, supabaseUser, 
                         {displayProject.name}
                     </h2>
                     <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
-                        项目下的所有创意任务
+                        {t('projectAllCreativeTasks')}
                     </p>
                     {hasSupabase && (
                         <span className="badge-success" style={{ marginTop: '8px' }}>
@@ -149,7 +151,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, supabaseUser, 
                     className="btn-primary"
                     style={{ padding: '12px 24px', whiteSpace: 'nowrap' }}
                 >
-                    + 开启新创意
+                    + {t('startNewCreative')}
                 </button>
             </div>
             
@@ -167,7 +169,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, supabaseUser, 
                             animation: 'spin 1s linear infinite'
                         }}></div>
                         <p style={{ color: 'var(--text-secondary)', marginTop: '16px', fontSize: '14px' }}>
-                            加载任务中...
+                            {t('loadingTasks')}
                         </p>
                     </div>
                 ) : briefs && briefs.length > 0 ? (
@@ -219,7 +221,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, supabaseUser, 
                                         className="btn-primary"
                                         style={{ padding: '10px 20px', fontSize: '14px' }}
                                     >
-                                        查看
+                                        {t('view')}
                                     </button>
                                     <button 
                                         onClick={() => handleDelete(brief.id)} 
@@ -231,7 +233,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, supabaseUser, 
                                             color: '#FCA5A5'
                                         }}
                                     >
-                                        删除
+                                        {t('delete')}
                                     </button>
                                 </div>
                             </div>
@@ -277,7 +279,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, supabaseUser, 
                             marginBottom: '12px',
                             letterSpacing: '-0.01em'
                         }}>
-                            还没有创意任务
+                            {t('noCreativeTasks')}
                         </h3>
                         <p style={{ 
                             fontSize: '15px', 
@@ -285,13 +287,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, supabaseUser, 
                             marginBottom: '24px',
                             lineHeight: '1.6'
                         }}>
-                            点击右上角的 <span style={{ 
-                                color: '#60A5FA',
-                                fontWeight: '500',
-                                padding: '2px 8px',
-                                background: 'rgba(59, 130, 246, 0.1)',
-                                borderRadius: '4px'
-                            }}>“+ 开启新创意”</span> 按钮开始创作！
+                            {t('clickButtonToStartCreative')}
                         </p>
                         <div style={{
                             display: 'inline-flex',
@@ -313,8 +309,9 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, supabaseUser, 
                                     opacity="0.5"
                                 />
                             </svg>
-                            每个项目可以包含多个创意任务
+                            {t('eachProjectCanIncludeMultipleTasks')}
                         </div>
+
                     </div>
                 )}
             </div>

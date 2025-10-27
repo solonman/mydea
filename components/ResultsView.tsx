@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import type { InspirationCase, CreativeProposal } from '../types';
+import { useLanguage } from '../i18n/useLanguage';
 import LoadingSpinner from './LoadingSpinner';
 
 // A simple markdown renderer
@@ -147,7 +148,8 @@ const ProposalCard: React.FC<{
   onExecute: (proposal: CreativeProposal) => Promise<void>;
   onPromoteAndExecute: (currentProposal: CreativeProposal, versionToPromote: Omit<CreativeProposal, 'history' | 'isFinalized' | 'executionDetails'>) => Promise<void>;
   isProcessing: boolean;
-}> = ({ proposal, index, onOptimize, onExecute, onPromoteAndExecute, isProcessing }) => {
+  t: (key: any, options?: any) => string;
+}> = ({ proposal, index, onOptimize, onExecute, onPromoteAndExecute, isProcessing, t }) => {
   const [showOptimizer, setShowOptimizer] = useState(false);
   const [feedback, setFeedback] = useState('');
   const [isExecuting, setIsExecuting] = useState(false);
@@ -257,7 +259,7 @@ const ProposalCard: React.FC<{
             userSelect: 'none'
           }}>
             <span>📚</span>
-            <span>查看历史版本 ({proposal.history.length})</span>
+            <span>{t('viewHistoricalVersions', { count: proposal.history.length })}</span>
           </summary>
           <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {proposal.history.slice().reverse().map(ver => (
@@ -286,7 +288,7 @@ const ProposalCard: React.FC<{
                 }}
               >
                 <p style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '4px' }}>
-                  <span className="badge-info" style={{ fontSize: '11px', marginRight: '8px' }}>V{ver.version}</span>
+                  <span className="badge-info" style={{ fontSize: '11px', marginRight: '8px' }}>{t('version')} {ver.version}</span>
                   {ver.conceptTitle}
                 </p>
                 <p style={{ fontSize: '13px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -339,7 +341,7 @@ const ProposalCard: React.FC<{
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                       <path d="M11 5H6C4.89543 5 4 5.89543 4 7V18C4 19.1046 4.89543 20 6 20H17C18.1046 20 19 19.1046 19 18V13M17.5858 3.58579C18.3668 2.80474 19.6332 2.80474 20.4142 3.58579C21.1953 4.36683 21.1953 5.63316 20.4142 6.41421L11.8284 15H9L9 12.1716L17.5858 3.58579Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                     </svg>
-                    <span>请输入您的修改意见</span>
+                    <span>{t('enterOptimizationFeedback')}</span>
                   </label>
                   <textarea 
                     id={`feedback-${proposal.id}`}
@@ -347,7 +349,7 @@ const ProposalCard: React.FC<{
                     value={feedback}
                     onChange={(e) => setFeedback(e.target.value)}
                     className="input-modern"
-                    placeholder="例如：这个想法不错，但能让文案更幽默一点吗？或者可以增加一些互动元素..."
+                    placeholder={t('enterOptimizationFeedback')}
                     style={{ 
                       width: '100%',
                       fontSize: '14px',
@@ -371,7 +373,7 @@ const ProposalCard: React.FC<{
                         className="btn-secondary"
                         style={{ padding: '10px 24px', fontSize: '14px' }}
                       >
-                        取消
+                        {t('cancel')}
                       </button>
                       <button 
                         type="submit" 
@@ -382,10 +384,10 @@ const ProposalCard: React.FC<{
                         {isProcessing ? (
                           <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <LoadingSpinner className="w-4 h-4"/>
-                            <span>正在优化...</span>
+                            <span>{t('submitting')}</span>
                           </span>
                         ) : (
-                          '提交优化'
+                          <span>{t('submitOptimization')}</span>
                         )}
                       </button>
                     </div>
@@ -407,7 +409,7 @@ const ProposalCard: React.FC<{
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                       <path d="M11 5H6C4.89543 5 4 5.89543 4 7V18C4 19.1046 4.89543 20 6 20H17C18.1046 20 19 19.1046 19 18V13M17.5858 3.58579C18.3668 2.80474 19.6332 2.80474 20.4142 3.58579C21.1953 4.36683 21.1953 5.63316 20.4142 6.41421L11.8284 15H9L9 12.1716L17.5858 3.58579Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                     </svg>
-                    <span>优化此方案</span>
+                    <span>{t('optimize')}</span>
                   </span>
                 </button>
                 <button 
@@ -419,17 +421,18 @@ const ProposalCard: React.FC<{
                   {isExecuting ? (
                     <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <LoadingSpinner className="w-4 h-4"/>
-                      <span>正在生成...</span>
+                      <span>{t('generating')}</span>
                     </span>
                   ) : (
                     <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <path d="M5 13L9 17L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                       </svg>
-                      <span>定稿并执行</span>
+                      <span>{t('finalizeAndExecute')}</span>
                     </span>
                   )}
                 </button>
+
               </div>
             )}
           </>
@@ -450,6 +453,7 @@ interface ResultsViewProps {
 }
 
 const ResultsView: React.FC<ResultsViewProps> = ({ inspirations, proposals, onFinish, onOptimize, onExecute, onPromoteAndExecute, isProcessing }) => {
+  const { t } = useLanguage();
   return (
     <div className="animate-fade-in" style={{ padding: '0 20px', maxWidth: '1200px', margin: '0 auto' }}>
       {/* 灵感探索区 */}
@@ -460,10 +464,10 @@ const ResultsView: React.FC<ResultsViewProps> = ({ inspirations, proposals, onFi
             marginBottom: '12px',
             letterSpacing: '-0.02em'
           }}>
-            🌍 全球灵感探索
+            {t('globalInspirationExploration')}
           </h2>
           <p style={{ fontSize: '15px', color: 'var(--text-secondary)' }}>
-            从世界各地的优秀案例中汲取灵感
+            {t('getInspiredFromExcellentCases')}
           </p>
         </div>
         <div style={{ 
@@ -538,22 +542,23 @@ const ResultsView: React.FC<ResultsViewProps> = ({ inspirations, proposals, onFi
             marginBottom: '12px',
             letterSpacing: '-0.02em'
           }}>
-            💡 为您生成的创意方案
+            {t('generatedCreativeProposals')}
           </h2>
           <p style={{ fontSize: '15px', color: 'var(--text-secondary)' }}>
-            基于 AI 智能分析，结合全球最佳实践
+            {t('baseOnAIAnalysis')}
           </p>
         </div>
         <div style={{ display: 'grid', gap: '24px' }}>
           {proposals.map((proposal, index) => (
-            <ProposalCard 
+    <ProposalCard 
               key={proposal.id + proposal.version} 
               proposal={proposal} 
               index={index} 
               onOptimize={onOptimize} 
               onExecute={onExecute} 
               onPromoteAndExecute={onPromoteAndExecute}
-              isProcessing={isProcessing} 
+              isProcessing={isProcessing}
+              t={t}
             />
           ))}
         </div>
@@ -570,7 +575,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({ inspirations, proposals, onFi
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M5 13L9 17L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
-            <span>完成并保存</span>
+            <span>{t('completeAndSave')}</span>
           </span>
         </button>
       </div>

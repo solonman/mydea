@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import type { User, Brief, Project } from '../types';
+import { useLanguage } from '../i18n/useLanguage';
 import CreativeBriefInput from './CreativeBriefInput';
 import { useProjects } from '../hooks';
 import type { User as SupabaseUser } from '../services/supabase';
@@ -16,6 +17,7 @@ interface HomeScreenProps {
 }
 
 const HomeScreen: React.FC<HomeScreenProps> = ({ user, supabaseUser, onCreateProject, onBriefSubmit, isLoading, activeProjectId, isProjectLocked = false }) => {
+  const { t } = useLanguage();
   // Use Supabase projects if available, otherwise fall back to localStorage
   const {
     projects: supabaseProjects,
@@ -80,7 +82,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, supabaseUser, onCreatePro
         setNewProjectName('');
         setShowNewProjectInput(false);
       } catch (error: any) {
-        alert(error.userMessage || '创建项目失败，请重试');
+        alert(error.userMessage || t('createProjectFailed'));
       }
     }
   };
@@ -91,7 +93,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, supabaseUser, onCreatePro
     // Handle case where 'new' is selected and name is typed
     if (selectedProjectId === 'new') {
        if (!newProjectName.trim()) {
-           alert("请为您的新项目命名。");
+           alert(t('pleaseNameYourProject'));
            return;
        }
        
@@ -113,7 +115,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, supabaseUser, onCreatePro
            projectIdToSubmit = newProject.id;
          }
        } catch (error: any) {
-         alert(error.userMessage || '创建项目失败，请重试');
+         alert(error.userMessage || t('createProjectFailed'));
          return;
        }
     }
@@ -153,14 +155,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, supabaseUser, onCreatePro
               fontSize: '16px',
               marginBottom: '8px'
             }}>
-              加载项目失败
+              {t('loadProjectsFailed')}
             </p>
             <p style={{ 
               fontSize: '14px',
               color: '#FEE2E2',
               marginBottom: '20px'
             }}>
-              {projectsError.userMessage || projectsError.message || '未知错误'}
+              {projectsError.userMessage || projectsError.message || t('unknownError')}
             </p>
             <button 
               onClick={() => window.location.reload()}
@@ -175,7 +177,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, supabaseUser, onCreatePro
                   <path d="M2 8C2 4.68629 4.68629 2 8 2C11.3137 2 14 4.68629 14 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
                   <path d="M8 2V6M8 2L6 4M8 2L10 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
-                重试
+                {t('retry')}
               </span>
             </button>
           </div>
@@ -198,14 +200,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, supabaseUser, onCreatePro
           backgroundClip: 'text',
           letterSpacing: '-0.02em'
         }}>
-          你好, {user.username}! 👋
+          {t('helloUser', { username: user.username })}
         </h2>
         <p style={{ 
           color: 'var(--text-secondary)', 
           fontSize: '15px',
           margin: 0
         }}>
-          准备好激发下一个绝妙创意了吗？
+          {t('readyForIdea')}
         </p>
         {user.role === 'admin' && (
           <div style={{ marginTop: '12px', display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
@@ -214,7 +216,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, supabaseUser, onCreatePro
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <circle cx="6" cy="6" r="5" fill="currentColor"/>
                 </svg>
-                已连接 Supabase
+                {t('connectedSupabase')}
               </span>
             )}
             <span style={{
@@ -232,7 +234,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, supabaseUser, onCreatePro
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M6 1L7.5 4.5L11 5L8.5 7.5L9 11L6 9L3 11L3.5 7.5L1 5L4.5 4.5L6 1Z" fill="currentColor"/>
               </svg>
-              管理员
+              {t('admin')}
             </span>
           </div>
         )}
@@ -242,7 +244,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, supabaseUser, onCreatePro
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <circle cx="6" cy="6" r="5" fill="currentColor"/>
               </svg>
-              已连接 Supabase
+              {t('connectedSupabase')}
             </span>
           </div>
         )}
@@ -261,7 +263,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, supabaseUser, onCreatePro
             letterSpacing: '0.01em'
           }}
         >
-          归属项目
+          {t('belongProject')}
         </label>
         <select
           id="project-select"
@@ -280,13 +282,13 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, supabaseUser, onCreatePro
           }}
         >
           {projectsLoading ? (
-            <option>加载中...</option>
+            <option>{t('loading')}</option>
           ) : (
             <>
               {projects.map(p => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
-              <option value="new">+ 新建项目</option>
+              <option value="new">+ {t('newProject')}</option>
             </>
           )}
         </select>
@@ -304,14 +306,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, supabaseUser, onCreatePro
               marginBottom: '12px'
             }}
           >
-            新项目名称
+            {t('newProjectName')}
           </label>
           <div className="flex gap-2">
             <input 
               type="text"
               value={newProjectName}
               onChange={(e) => setNewProjectName(e.target.value)}
-              placeholder="输入新项目名称..."
+              placeholder={t('inputNewProjectName')}
               className="input-modern"
               style={{ flex: 1 }}
               onKeyDown={(e) => e.key === 'Enter' && handleCreateProject()}
@@ -323,7 +325,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, supabaseUser, onCreatePro
               className="btn-primary"
               style={{ padding: '12px 24px', whiteSpace: 'nowrap' }}
             >
-              {projectsLoading ? '创建中...' : '创建'}
+              {projectsLoading ? t('creating') : t('create')}
             </button>
             <button 
               onClick={() => {
@@ -337,7 +339,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, supabaseUser, onCreatePro
               className="btn-secondary"
               style={{ padding: '12px 24px', whiteSpace: 'nowrap' }}
             >
-              取消
+              {t('cancel')}
             </button>
           </div>
         </div>

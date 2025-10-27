@@ -1,19 +1,22 @@
 import React from 'react';
 import { GeneratingStatus } from '../types';
+import { useLanguage } from '../i18n/useLanguage';
 import LoadingSpinner from './LoadingSpinner';
 
 interface GeneratingViewProps {
   status: GeneratingStatus;
 }
 
-const statusConfig: Record<GeneratingStatus, { message: string; progress: number; icon: string }> = {
-  analyzing: { message: "正在分析您的需求...", progress: 25, icon: "🔍" },
-  inspiring: { message: "正在全球范围内搜索灵感...", progress: 55, icon: "🌍" },
-  creating: { message: "正在为您量身打造创意方案...", progress: 85, icon: "✨" },
-  finished: { message: "生成完毕！", progress: 100, icon: "🎉" }
-};
-
 const GeneratingView: React.FC<GeneratingViewProps> = ({ status }) => {
+  const { t } = useLanguage();
+  
+  const statusConfig: Record<GeneratingStatus, { message: string; progress: number; icon: string }> = {
+    analyzing: { message: t('analyzingRequirements'), progress: 25, icon: "🔍" },
+    inspiring: { message: t('searchingGlobalInspirations'), progress: 55, icon: "🌍" },
+    creating: { message: t('creatingProposals'), progress: 85, icon: "✨" },
+    finished: { message: t('finishingUp'), progress: 100, icon: "🎉" }
+  };
+  
   const config = statusConfig[status];
   
   return (
@@ -59,7 +62,7 @@ const GeneratingView: React.FC<GeneratingViewProps> = ({ status }) => {
           color: 'var(--text-tertiary)',
           marginBottom: '32px'
         }}>
-          请稍候，顶级的创意需要一点时间酝酿。
+          {t('pleaseWait')}
         </p>
         
         {/* 进度条 */}
@@ -71,7 +74,7 @@ const GeneratingView: React.FC<GeneratingViewProps> = ({ status }) => {
             marginBottom: '8px'
           }}>
             <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-              进度
+              {t('progress')}
             </span>
             <span style={{
               fontSize: '13px',
@@ -116,7 +119,7 @@ const GeneratingView: React.FC<GeneratingViewProps> = ({ status }) => {
             margin: 0,
             lineHeight: '1.6'
           }}>
-            💡 <strong>温馨提示：</strong> AI 正在综合全球最佳案例和您的需求，为您量身定制创意方案
+            💡 {t('tip')}: {t('aiGeneratingProposals')}
           </p>
         </div>
       </div>

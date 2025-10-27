@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import type { Brief, RefinementData } from '../types';
+import { useLanguage } from '../i18n/useLanguage';
 import LoadingSpinner from './LoadingSpinner';
 
 interface BriefRefinementProps {
@@ -10,6 +11,7 @@ interface BriefRefinementProps {
 }
 
 const BriefRefinement: React.FC<BriefRefinementProps> = ({ brief, refinementData, onSubmit, isLoading }) => {
+  const { t } = useLanguage();
   const [answers, setAnswers] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -28,7 +30,7 @@ const BriefRefinement: React.FC<BriefRefinementProps> = ({ brief, refinementData
           marginBottom: '32px',
           letterSpacing: '-0.01em'
         }}>
-          🎯 智能需求分析与确认
+          {t('intelligentRequirementAnalysis')}
         </h2>
         
         <div style={{ display: 'grid', gap: '24px' }}>
@@ -39,7 +41,7 @@ const BriefRefinement: React.FC<BriefRefinementProps> = ({ brief, refinementData
                 <path d="M9 12H15M12 9V15M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="#60A5FA" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
               <h3 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--text-primary)', margin: 0 }}>
-                您的初步需求
+                {t('yourInitialRequirement')}
               </h3>
               <span style={{
                 padding: '2px 8px',
@@ -71,7 +73,7 @@ const BriefRefinement: React.FC<BriefRefinementProps> = ({ brief, refinementData
                 <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
               <h3 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--text-primary)', margin: 0 }}>
-                我的理解
+                {t('myUnderstanding')}
               </h3>
             </div>
             <p style={{
@@ -91,7 +93,7 @@ const BriefRefinement: React.FC<BriefRefinementProps> = ({ brief, refinementData
                 <path d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke="#A855F7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
               <h3 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--text-primary)', margin: 0 }}>
-                为了更好的创意，请您补充一些信息
+                {t('improveCreativity')}
               </h3>
             </div>
             <div style={{ 
@@ -140,7 +142,7 @@ const BriefRefinement: React.FC<BriefRefinementProps> = ({ brief, refinementData
               value={answers}
               onChange={(e) => setAnswers(e.target.value)}
               className="input-modern"
-              placeholder="请在此处回答以上问题，信息越详细，创意越精准..."
+              placeholder={t('pleaseEnterFeedback')}
               style={{ resize: 'vertical', minHeight: '120px' }}
             />
           </div>
@@ -163,7 +165,7 @@ const BriefRefinement: React.FC<BriefRefinementProps> = ({ brief, refinementData
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M5 13L9 17L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
-                <span>确认并生成灵感</span>
+                <span>{t('confirmAndGenerateInspirations')}</span>
               </span>
             )}
           </button>

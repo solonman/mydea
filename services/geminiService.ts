@@ -29,7 +29,7 @@ const PROPOSAL_SCHEMA = {
 };
 
 
-export async function refineBrief(briefText: string, creativeType: string): Promise<RefinementData> {
+export async function refineBrief(briefText: string, creativeType: string, projectName?: string): Promise<RefinementData> {
   // 验证输入
   try {
     validateBrief(briefText);
@@ -39,16 +39,26 @@ export async function refineBrief(briefText: string, creativeType: string): Prom
 
   const model = 'gemini-2.5-flash';
   
-  const prompt = `You are an expert advertising strategist. A user has provided an initial creative brief. Your task is to analyze it, provide a concise summary of your understanding in Chinese, and ask 2-3 critical clarifying questions in Chinese to gather the necessary details for generating high-quality creative ideas.
+  const projectContext = projectName ? `This task is for the "${projectName}" project. You already know the brand, so do NOT ask what brand or company this is for.` : '';
+  
+  const prompt = `You are an expert advertising strategist. A user has provided an initial creative brief for their ${creativeType} task. Your task is to analyze it, provide a concise summary of your understanding in Chinese, and ask 2-3 critical clarifying questions in Chinese to gather necessary details.
 
+  ${projectContext}
+  
   User Brief: "${briefText}"
   Creative Type: "${creativeType}"
 
-  Based on this, please provide a JSON object with a 'summary' and a list of 'questions'. The questions should be tailored to the creative type. For example, for a Slogan, ask about brand voice and target audience. For a video, ask about channels and budget.
+  Based on this, provide a JSON object with a 'summary' and a list of 'questions'. 
+  - The summary should acknowledge the project context if provided
+  - Questions should be tailored to the creative type and details needed
+  - For a Slogan: ask about brand voice, core message, and target audience (NOT the brand name)
+  - For video: ask about channels, target audience, key message
+  - For social media: ask about platform preferences, tone, and key objectives
+  - NEVER ask "what brand/company is this for?" since the project already defines that
   `;
 
   try {
-    logger.info('Refining brief', { briefText: briefText.substring(0, 50), creativeType });
+    logger.info('Refining brief', { briefText: briefText.substring(0, 50), creativeType, projectName });
 
     const result = await withTimeoutAndRetry(
       async () => {
@@ -95,48 +105,93 @@ export async function refineBrief(briefText: string, creativeType: string): Prom
   }
 }
 
-async function getInspirations(refinedBrief: string): Promise<InspirationCase[]> {
+async function getInspirations(refinedBrief: string, creativeType: string): Promise<InspirationCase[]> {
   const model = 'gemini-2.5-flash';
 
-  const prompt = `You are a creative research assistant with access to Google Search. Based on the following refined creative brief, find 3 highly relevant and successful recent advertising campaign examples from around the world.
+  // Step 1: Search for recent campaigns using Google Search
+  const searchPrompt = `Search for the most recent successful advertising campaigns and creative cases from 2023-2025 that match:
+  
+Creative Type: ${creativeType}
+Brief: ${refinedBrief}
 
-  Refined Brief: "${refinedBrief}"
-
-  Return the result as a JSON array string. Each item in the array should be an object with 'title' (in its original language), and 'highlight' (in Chinese).
-  Do NOT include markdown formatting like \`\`\`json.
-  `;
+Find 3 specific, real campaign examples with their names, URLs, and brief descriptions.`;
 
   try {
-    logger.info('Fetching inspirations');
+    logger.info('Fetching inspirations', { creativeType });
+
+    // Step 1: Use Google Search to find recent cases
+    const searchResults = await withTimeoutAndRetry(
+      async () => {
+        const response = await ai.models.generateContent({
+          model: model,
+          contents: searchPrompt,
+          config: {
+            tools: [{ googleSearch: {} }],
+          },
+        });
+        return response.text;
+      },
+      {
+        timeoutMs: 30000,
+        maxRetries: 2,
+        delayMs: 1000,
+        shouldRetry: isRetryableError,
+      }
+    );
+
+    logger.info('Search results obtained', { resultLength: searchResults.length });
+
+    // Step 2: Parse search results and generate structured data
+    const parsePrompt = `Based on these search results about advertising campaigns, extract and analyze 3 campaigns:
+
+${searchResults}
+
+For each campaign, provide a JSON object with these exact fields:
+{
+  "title": "Campaign/Product name",
+  "highlight": "Key creative insight or unique selling point in Chinese",
+  "category": "${creativeType}",
+  "relevanceScore": <number 0-100 indicating relevance to the brief>,
+  "detailedDescription": "Detailed explanation of the campaign strategy and execution in Chinese",
+  "keyInsights": "Core innovative points or breakthrough thinking in Chinese",
+  "targetAudience": "Target demographic description",
+  "industry": "Industry category"
+}
+
+Return ONLY a JSON array with exactly 3 objects, no markdown, no explanations.`;
 
     const result = await withTimeoutAndRetry(
       async () => {
         const response = await ai.models.generateContent({
           model: model,
-          contents: prompt,
+          contents: parsePrompt,
           config: {
-            tools: [{ googleSearch: {} }],
+            responseMimeType: "application/json",
           },
         });
 
         const jsonText = response.text.trim().replace(/^```json\s*|```\s*$/g, '');
-        const parsedInspirations = JSON.parse(jsonText) as {title: string; highlight: string;}[];
+        const parsedInspirations = JSON.parse(jsonText) as any[];
         
-        const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-        
-        return parsedInspirations.slice(0, 3).map((insp, index) => {
-          const sourceUrl = (groundingChunks && groundingChunks[index]?.web?.uri) ? groundingChunks[index].web.uri : undefined;
+        return parsedInspirations.slice(0, 3).map((insp) => {
           return {
-            ...insp,
-            imageUrl: `https://picsum.photos/seed/${encodeURIComponent(insp.title)}/600/400`,
-            sourceUrl: sourceUrl,
-          }
+            title: insp.title || '案例',
+            highlight: insp.highlight || '',
+            category: insp.category || creativeType,
+            relevanceScore: Math.min(100, Math.max(0, insp.relevanceScore || 85)),
+            detailedDescription: insp.detailedDescription || '',
+            keyInsights: insp.keyInsights || insp.highlight || '',
+            targetAudience: insp.targetAudience || '通用',
+            industry: insp.industry || '广告',
+            imageUrl: `https://picsum.photos/seed/${encodeURIComponent(insp.title || '案例')}/600/400`,
+            sourceUrl: insp.sourceUrl,
+          } as InspirationCase;
         });
       },
       {
-        timeoutMs: 45000, // 搜索需要更长时间
+        timeoutMs: 30000,
         maxRetries: 2,
-        delayMs: 2000,
+        delayMs: 1500,
         shouldRetry: isRetryableError,
       }
     );
@@ -146,10 +201,9 @@ async function getInspirations(refinedBrief: string): Promise<InspirationCase[]>
 
   } catch (error) {
     logger.error("Error getting inspirations", error as Error);
-    // 灵感获取失败不阻塞流程，返回默认数据
     return [
-      { title: "案例获取失败", highlight: "无法从网络获取灵感案例，这可能是网络问题或 API 限制。", imageUrl: "https://picsum.photos/seed/error1/600/400" },
-      { title: "请检查您的网络连接", highlight: "我们将继续为您生成创意方案，但缺少了外部灵感参考。", imageUrl: "https://picsum.photos/seed/error2/600/400" },
+      { title: "案例获取失败", highlight: "无法从网络获取灵感案例", imageUrl: "https://picsum.photos/seed/error1/600/400", relevanceScore: 0 },
+      { title: "请检查网络连接", highlight: "我们将继续为您生成创意方案", imageUrl: "https://picsum.photos/seed/error2/600/400", relevanceScore: 0 },
     ];
   }
 }
@@ -198,8 +252,8 @@ async function generateProposals(refinedBrief: string, inspirations: Inspiration
       },
       {
         timeoutMs: 60000, // 方案生成需要更长时间
-        maxRetries: 2,
-        delayMs: 2000,
+        maxRetries: 3,
+        delayMs: 3000, // 增加延迟时间以更好地处理过载情况
         shouldRetry: isRetryableError,
       }
     );
@@ -215,11 +269,12 @@ async function generateProposals(refinedBrief: string, inspirations: Inspiration
 
 export async function generateCreativePackage(
   refinedBrief: string,
+  creativeType: string,
   projectContext: string,
   onStatusUpdate: (status: GeneratingStatus) => void
 ): Promise<{ inspirations: InspirationCase[], proposals: Omit<CreativeProposal, 'id' | 'version' | 'history' | 'isFinalized' | 'executionDetails'>[] }> {
   onStatusUpdate('inspiring');
-  const inspirations = await getInspirations(refinedBrief);
+  const inspirations = await getInspirations(refinedBrief, creativeType);
   
   onStatusUpdate('creating');
   const proposals = await generateProposals(refinedBrief, inspirations, projectContext);
@@ -285,7 +340,7 @@ export async function optimizeProposal(
       {
         timeoutMs: 45000,
         maxRetries: 3,
-        delayMs: 1500,
+        delayMs: 3000, // 增加延迟时间以更好地处理过载情况
         shouldRetry: isRetryableError,
       }
     );
@@ -368,8 +423,8 @@ export async function generateExecutionPlan(
       },
       {
         timeoutMs: 60000, // 执行计划生成需要更长时间
-        maxRetries: 2,
-        delayMs: 2000,
+        maxRetries: 3,
+        delayMs: 3000, // 增加延迟时间以更好地处理过载情况
         shouldRetry: isRetryableError,
       }
     );

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import type { User } from '../types';
+import type { User, Project } from '../types';
+import { useLanguage } from '../i18n/useLanguage';
 import { useProjects } from '../hooks';
 import type { User as SupabaseUser } from '../services/supabase';
 
@@ -11,6 +12,7 @@ interface ProjectDashboardProps {
 }
 
 const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ user, supabaseUser, onCreateProject, onViewProject }) => {
+  const { t } = useLanguage();
   const [newProjectName, setNewProjectName] = useState('');
 
   // Use Supabase projects if available
@@ -130,17 +132,17 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ user, supabaseUser,
           color: 'var(--text-primary)',
           letterSpacing: '-0.02em'
         }}>
-          欢迎回来, {user.username}! 👋
+          {t('helloUser', { username: user.username })}! 👋
         </h2>
         <p style={{ color: 'var(--text-secondary)', fontSize: '15px', marginBottom: '8px' }}>
-          在这里管理您的创意项目
+          {t('manageYourCreativeProjects')}
         </p>
         {hasSupabase && (
           <span className="badge-success">
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
               <circle cx="6" cy="6" r="5" fill="currentColor"/>
             </svg>
-            已连接 Supabase • 活跃项目: {stats.active}
+            {t('connectedSupabase')} • {t('activeProjects', { count: stats.active })}
           </span>
         )}
       </div>
@@ -153,7 +155,7 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ user, supabaseUser,
               type="text"
               value={newProjectName}
               onChange={(e) => setNewProjectName(e.target.value)}
-              placeholder="输入新项目名称..."
+              placeholder={t('inputNewProjectName')}
               className="input-modern"
               style={{ flex: '1 1 300px', minWidth: '200px' }}
               aria-label="New project name"
@@ -164,7 +166,7 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ user, supabaseUser,
               className="btn-primary"
               style={{ padding: '12px 32px', whiteSpace: 'nowrap' }}
             >
-              {projectsLoading ? '创建中...' : '创建新项目'}
+              {projectsLoading ? t('creating') : t('createNewProject')}
             </button>
           </div>
         </form>
@@ -186,11 +188,11 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ user, supabaseUser,
             color: 'var(--text-primary)',
             margin: 0
           }}>
-            您的项目
+            {t('myProjects')}
           </h3>
           {projectsLoading && (
             <span style={{ fontSize: '13px', color: 'var(--text-tertiary)' }}>
-              加载中...
+              {t('loading')}
             </span>
           )}
         </div>
@@ -207,7 +209,7 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ user, supabaseUser,
               animation: 'spin 1s linear infinite'
             }}></div>
             <p style={{ color: 'var(--text-secondary)', marginTop: '16px', fontSize: '14px' }}>
-              加载项目中...
+              {t('loadingProjects')}
             </p>
           </div>
         ) : projects && projects.length > 0 ? (
@@ -234,14 +236,14 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ user, supabaseUser,
                     </h3>
                     <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
                       {hasSupabase ? (
-                        <span>状态: {project.status === 'active' ? '活跃' : '已归档'}</span>
+                        <span>{project.status === 'active' ? t('active') : t('archived')}</span>
                       ) : (
-                        <span>{project.briefs?.length || 0} 个创意任务</span>
+                        <span>{project.briefs?.length || 0} {t('creativeTasks')}</span>
                       )}
                     </p>
                     {hasSupabase && (
                       <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                        创建于: {new Date(project.created_at).toLocaleDateString('zh-CN')}
+                        {t('createdAt')}: {new Date(project.created_at).toLocaleDateString('zh-CN')}
                       </p>
                     )}
                   </div>
@@ -251,7 +253,7 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ user, supabaseUser,
                       className="btn-primary"
                       style={{ padding: '10px 20px', fontSize: '14px' }}
                     >
-                      查看详情
+                      {t('viewDetails')}
                     </button>
                     {hasSupabase && project.status === 'active' && (
                       <button 
@@ -260,7 +262,7 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ user, supabaseUser,
                         style={{ padding: '10px 16px', fontSize: '14px' }}
                         title="归档项目"
                       >
-                        归档
+                        {t('archive')}
                       </button>
                     )}
                     {hasSupabase && (
@@ -275,7 +277,7 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ user, supabaseUser,
                         }}
                         title="删除项目"
                       >
-                        删除
+                        {t('delete')}
                       </button>
                     )}
                   </div>
@@ -300,10 +302,10 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ user, supabaseUser,
               </svg>
             </div>
             <h3 style={{ fontSize: '18px', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-              还没有项目
+              {t('noProjects')}
             </h3>
             <p style={{ fontSize: '14px', color: 'var(--text-tertiary)' }}>
-              创建一个新项目来开始您的第一个创意吧！
+              {t('createNewProjectToStart')}
             </p>
           </div>
         )}

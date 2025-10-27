@@ -91,6 +91,21 @@ export function handleError(error: unknown): AppError {
     );
   }
   
+  // 503服务不可用错误（模型过载）
+  if (error instanceof Error && (
+    error.message.includes('503') || 
+    error.message.toLowerCase().includes('service unavailable') ||
+    error.message.toLowerCase().includes('overloaded') ||
+    error.message.toLowerCase().includes('the model is overloaded')
+  )) {
+    return new AppError(
+      'AI service overloaded',
+      ErrorCodes.AI_ERROR,
+      'AI 服务当前过载，请稍等几分钟后重试',
+      true
+    );
+  }
+  
   // AI 服务错误
   if (error instanceof Error && (
     error.message.includes('Gemini') || 

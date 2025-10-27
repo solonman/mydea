@@ -43,6 +43,18 @@ export function setUserRole(username: string, role: 'user' | 'admin'): User {
   return user;
 }
 
+export function updateUser(username: string, updatedUser: User): User {
+  const db = getDb();
+  const user = db[username];
+  if (!user) throw new Error('User not found');
+  
+  // 更新用户信息
+  db[username] = updatedUser;
+  saveDb(db);
+  setSessionUser(updatedUser);
+  return updatedUser;
+}
+
 // --- Session Management ---
 
 export function setSessionUser(user: User) {

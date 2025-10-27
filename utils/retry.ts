@@ -174,8 +174,13 @@ export function isRetryableError(error: Error): boolean {
     return true;
   }
   
+  // 503服务不可用错误（模型过载），可重试
+  if (message.includes('503') || message.includes('service unavailable') || message.includes('overloaded')) {
+    return true;
+  }
+  
   // 临时性 AI 错误，可重试
-  if (message.includes('temporarily unavailable') || message.includes('service unavailable')) {
+  if (message.includes('temporarily unavailable')) {
     return true;
   }
   

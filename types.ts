@@ -7,6 +7,7 @@ export enum Stage {
   BRIEF_REFINEMENT,
   GENERATING,
   RESULTS,
+  SETTINGS, // 用户设置页面
 }
 
 export type CreativeType = "Slogan" | "社交媒体文案" | "平面设计" | "视频创意" | "公关活动" | "品牌命名";
@@ -26,6 +27,13 @@ export interface InspirationCase {
   highlight: string;
   imageUrl: string;
   sourceUrl?: string;
+  // 新增字段用于提升相关性
+  category?: string;              // 创意分类（如：Slogan、平面设计等）
+  relevanceScore?: number;        // 相关性评分 0-100
+  detailedDescription?: string;   // 案例详细描述
+  keyInsights?: string;           // 核心洞察
+  targetAudience?: string;        // 目标人群
+  industry?: string;              // 所属行业
 }
 
 export interface ExecutionDetails {
@@ -66,8 +74,12 @@ export interface Project {
 
 export type UserRole = 'user' | 'admin';
 
+export type Language = 'zh' | 'en'; // 支持的语言
+
 export interface User {
     username: string;
     projects: Project[];
     role?: UserRole; // 用户角色，默认为普通用户
+    avatar?: string; // 头像URL
+    language?: Language; // 语言偏好
 }
