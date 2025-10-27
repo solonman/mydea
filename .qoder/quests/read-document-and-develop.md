@@ -939,3 +939,401 @@ graph LR
 | Gemini API 文档 | https://ai.google.dev/docs |
 | React 性能优化 | https://react.dev/learn/render-and-commit |
 | Vitest 测试框架 | https://vitest.dev |
+
+## 12. 开发实施指南
+
+### 12.1 第一阶段实施详细步骤
+
+本节提供第一阶段开发任务的详细实施指导，包括需要创建的文件、代码结构和集成方式。
+
+#### 12.1.1 任务 1：创建错误处理系统
+
+**目标**：建立统一的错误处理机制，提供友好的用户提示和完善的错误分类
+
+**创建文件**：`utils/errors.ts`
+
+**核心功能需求**：
+
+| 功能模块 | 职责 | 导出内容 |
+|----------|------|----------|
+| AppError 类 | 自定义错误类型 | class AppError |
+| ErrorCodes 常量 | 错误代码枚举 | const ErrorCodes |
+| handleError 函数 | 错误转换处理 | function handleError() |
+| validateBriefInput 函数 | 输入验证 | function validateBriefInput() |
+| sanitizeInput 函数 | 输入清理 | function sanitizeInput() |
+
+**AppError 类属性定义**：
+
+| 属性 | 类型 | 说明 |
+|------|------|------|
+| message | string | 技术错误消息（用于日志） |
+| code | string | 错误代码（来自 ErrorCodes） |
+| userMessage | string | 用户友好的错误提示 |
+| retryable | boolean | 是否可重试 |
+
+**ErrorCodes 分类要求**：
+
+```
+客户端错误（CLI_）：
+- CLI_INVALID_INPUT
+- CLI_VALIDATION_ERROR
+
+认证错误（AUTH_）：
+- AUTH_TOKEN_EXPIRED
+- AUTH_INVALID_TOKEN
+- AUTH_UNAUTHORIZED
+
+业务错误（BIZ_）：
+- BIZ_QUOTA_EXCEEDED
+- BIZ_BRIEF_TOO_LONG
+- BIZ_INVALID_CREATIVE_TYPE
+
+外部服务错误（EXT_）：
+- EXT_GEMINI_TIMEOUT
+- EXT_GEMINI_ERROR
+- EXT_NETWORK_ERROR
+- EXT_RATE_LIMIT
+
+系统错误（SYS_）：
+- SYS_DATABASE_ERROR
+- SYS_UNKNOWN_ERROR
+```
+
+**handleError 函数逻辑**：
+
+```mermaid
+graph TD
+    A[接收错误] --> B{错误类型判断}
+    B -->|AppError| C[直接返回]
+    B -->|Error 对象| D{检查错误消息}
+    B -->|HTTP 错误| E{检查状态码}
+    B -->|其他| F[创建 UNKNOWN_ERROR]
+    
+    D -->|包含 timeout| G[创建 TIMEOUT 错误]
+    D -->|包含 network| H[创建 NETWORK 错误]
+    D -->|包含 API| I[创建 API 错误]
+    D -->|其他| F
+    
+    E -->|401| J[创建 UNAUTHORIZED 错误]
+    E -->|429| K[创建 RATE_LIMIT 错误]
+    E -->|5xx| L[创建 SERVER 错误]
+    E -->|其他| F
+    
+    C --> M[返回 AppError]
+    G --> M
+    H --> M
+    I --> M
+    J --> M
+    K --> M
+    L --> M
+    F --> M
+```
+
+**输入验证规则**：
+
+| 验证项 | 规则 | 错误类型 | 用户提示 |
+|--------|------|----------|----------|
+| 空内容 | text.trim().length === 0 | CLI_INVALID_INPUT | "需求描述不能为空" |
+| 内容过长 | text.length > 5000 | BIZ_BRIEF_TOO_LONG | "需求描述过长，请控制在 5000 字以内" |
+
+#### 12.1.2 任务 2：创建请求工具函数
+
+**目标**：实现超时控制和自动重试机制
+
+**创建文件**：`utils/request.ts`
+
+**核心功能需求**：
+
+| 函数名 | 功能 | 参数 | 返回值 |
+|--------|------|------|--------|
+| withTimeout | 为 Promise 添加超时控制 | fn, timeoutMs | Promise<T> |
+| withRetry | 为函数添加重试逻辑 | fn, options | Promise<T> |
+| sleep | 延迟函数 | ms | Promise<void> |
+
+**withTimeout 函数设计**：
+
+- 使用 Promise.race 实现超时
+- 超时时抛出带有 timeout 关键字的错误
+- 默认超时时间：30 秒
+
+**withRetry 函数设计**：
+
+**选项参数（RetryOptions）**：
+
+| 选项 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| maxRetries | number | 3 | 最大重试次数 |
+| initialDelay | number | 1000 | 初始延迟（毫秒） |
+| maxDelay | number | 10000 | 最大延迟（毫秒） |
+| backoffFactor | number | 2 | 退避系数 |
+| retryableErrors | string[] | [] | 可重试的错误代码 |
+
+**重试逻辑流程**：
+
+```mermaid
+stateDiagram-v2
+    [*] --> 执行函数
+    执行函数 --> 成功: 成功
+    执行函数 --> 检查错误: 失败
+    
+    检查错误 --> 检查次数: 可重试错误
+    检查错误 --> 抛出错误: 不可重试错误
+    
+    检查次数 --> 计算延迟: 未达最大次数
+    检查次数 --> 抛出错误: 已达最大次数
+    
+    计算延迟 --> 等待
+    等待 --> 执行函数: 重试
+    
+    成功 --> [*]
+    抛出错误 --> [*]
+```
+
+**退避策略计算**：
+
+```
+delay = min(
+  initialDelay * (backoffFactor ^ retryCount),
+  maxDelay
+)
+
+示例（指数退避）：
+第1次重试：1000ms
+第2次重试：2000ms
+第3次重试：4000ms
+```
+
+#### 12.1.3 任务 3：重构 Gemini 服务层
+
+**目标**：集成错误处理和请求优化，提升服务稳定性
+
+**修改文件**：`services/geminiService.ts`
+
+**改造要点**：
+
+| 函数名 | 改造内容 | 优先级 |
+|--------|----------|--------|
+| refineBrief | 添加输入验证、超时控制、错误处理 | 高 |
+| getInspirations | 添加超时控制、重试机制 | 高 |
+| generateProposals | 添加超时控制、错误处理 | 高 |
+| optimizeProposal | 添加超时控制、错误处理 | 中 |
+| generateExecutionPlan | 添加超时控制、错误处理 | 中 |
+
+**refineBrief 函数改造清单**：
+
+1. **在函数开始处添加输入验证**：
+   - 调用 `validateBriefInput(briefText)`
+   - 调用 `sanitizeInput(briefText)`
+
+2. **包装 API 调用**：
+   - 使用 `withTimeout` 设置 15 秒超时
+   - 使用 `withRetry` 配置重试（最多 2 次）
+
+3. **统一错误处理**：
+   - 使用 try-catch 捕获所有错误
+   - 调用 `handleError()` 转换错误
+   - 抛出 AppError
+
+**getInspirations 函数改造清单**：
+
+1. **添加超时控制**：20 秒
+2. **添加重试机制**：最多 3 次，包含网络错误
+3. **降级处理**：失败时返回友好的提示案例而非抛出错误
+
+**超时时间配置表**：
+
+| API 函数 | 超时时间 | 理由 |
+|----------|----------|------|
+| refineBrief | 15 秒 | Flash 模型，快速响应 |
+| getInspirations | 20 秒 | 包含搜索，稍慢 |
+| generateProposals | 45 秒 | Pro 模型，内容复杂 |
+| optimizeProposal | 30 秒 | Pro 模型，单个优化 |
+| generateExecutionPlan | 30 秒 | Pro 模型，文本生成 |
+
+**重试配置表**：
+
+| API 函数 | 最大重试次数 | 可重试错误 |
+|----------|--------------|------------|
+| refineBrief | 2 | 网络错误、超时 |
+| getInspirations | 3 | 网络错误、超时、5xx |
+| generateProposals | 2 | 网络错误、超时 |
+| optimizeProposal | 2 | 网络错误、超时 |
+| generateExecutionPlan | 2 | 网络错误、超时 |
+
+#### 12.1.4 任务 4：创建错误展示组件
+
+**目标**：在 UI 层统一展示错误信息
+
+**创建文件**：`components/ErrorMessage.tsx`
+
+**组件属性（Props）定义**：
+
+| 属性 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| error | AppError \| null | 是 | 错误对象 |
+| onRetry | () => void | 否 | 重试回调函数 |
+| onDismiss | () => void | 否 | 关闭回调函数 |
+
+**组件展示逻辑**：
+
+| 条件 | 显示内容 |
+|------|----------|
+| error 为 null | 不渲染任何内容 |
+| error.retryable === true | 显示重试按钮 |
+| error.retryable === false | 仅显示关闭按钮 |
+
+**视觉设计要求**：
+
+| 错误类别 | 背景色 | 图标 | 样式类 |
+|----------|--------|------|--------|
+| 客户端错误 | 橙色 | ⚠️ | bg-orange-600 |
+| 外部服务错误 | 黄色 | 🔄 | bg-yellow-600 |
+| 系统错误 | 红色 | ❌ | bg-red-600 |
+
+#### 12.1.5 任务 5：更新组件集成错误处理
+
+**目标**：在现有组件中集成新的错误处理系统
+
+**需要修改的组件**：
+
+| 组件文件 | 修改内容 |
+|----------|----------|
+| CreativeBriefInput.tsx | 添加输入验证、错误展示 |
+| BriefRefinement.tsx | 添加错误展示、重试逻辑 |
+| GeneratingView.tsx | 添加错误处理、降级显示 |
+| ResultsView.tsx | 添加错误展示 |
+
+**通用修改模式**：
+
+1. **添加状态管理**：
+   ```
+   const [error, setError] = useState<AppError | null>(null);
+   ```
+
+2. **包装异步调用**：
+   ```
+   try {
+     setError(null);
+     await someAsyncFunction();
+   } catch (e) {
+     const appError = handleError(e);
+     setError(appError);
+   }
+   ```
+
+3. **集成 ErrorMessage 组件**：
+   ```
+   在返回的 JSX 中添加：
+   <ErrorMessage 
+     error={error} 
+     onRetry={handleRetry} 
+     onDismiss={() => setError(null)} 
+   />
+   ```
+
+### 12.2 第一阶段验收标准
+
+#### 12.2.1 功能验收
+
+| 验收项 | 验收方法 | 预期结果 |
+|--------|----------|----------|
+| 错误分类正确 | 触发各类错误，检查错误代码 | 错误代码符合分类规范 |
+| 用户提示友好 | 触发错误，查看提示文案 | 文案清晰易懂，无技术术语 |
+| 超时控制生效 | 模拟慢速 API，检查超时 | 超时后抛出 TIMEOUT 错误 |
+| 重试机制正确 | 模拟临时失败，观察重试 | 按配置次数重试，延迟递增 |
+| 可重试错误显示重试按钮 | 触发网络错误 | UI 显示重试按钮 |
+| 不可重试错误不显示重试按钮 | 触发验证错误 | UI 仅显示关闭按钮 |
+
+#### 12.2.2 代码质量验收
+
+| 验收项 | 标准 |
+|--------|------|
+| TypeScript 类型完整 | 无 any 类型，所有导出函数有类型签名 |
+| 错误处理完整 | 所有异步函数都有 try-catch |
+| 代码注释清晰 | 关键函数有 JSDoc 注释 |
+| 命名规范统一 | 遵循驼峰命名，常量全大写 |
+
+#### 12.2.3 用户体验验收
+
+| 场景 | 验收标准 |
+|------|----------|
+| 网络断开 | 3 秒内显示"网络连接失败"提示，提供重试按钮 |
+| API 超时 | 显示"请求超时，请稍后重试"，自动重试 2 次 |
+| 输入过长 | 立即显示"需求描述过长"，不发送请求 |
+| 服务器错误 | 显示"系统暂时不可用"，提供重试选项 |
+
+### 12.3 第一阶段技术债务记录
+
+| 技术债务项 | 说明 | 计划解决阶段 |
+|------------|------|---------------|
+| API Key 仍在前端 | 当前仍直接调用 Gemini | 第二阶段（后端代理） |
+| 无请求日志 | 错误日志仅在控制台 | 第三阶段（监控接入） |
+| 缓存未实现 | 重复请求未缓存 | 第二阶段（缓存层） |
+
+### 12.4 开发环境配置
+
+#### 12.4.1 依赖安装
+
+当前项目无需安装新依赖，所有工具函数使用 TypeScript 原生实现。
+
+#### 12.4.2 开发调试建议
+
+**调试错误处理**：
+
+在浏览器控制台中测试：
+```
+测试方法（在 Console 中）：
+1. 断网测试：开发者工具 -> Network -> Offline
+2. 慢速网络：开发者工具 -> Network -> Slow 3G
+3. 超时模拟：在 geminiService 中临时添加长延迟
+```
+
+**调试重试机制**：
+
+在代码中临时添加日志：
+```
+在 withRetry 函数中添加：
+console.log(`Retry attempt ${retryCount + 1}/${maxRetries}`);
+```
+
+### 12.5 常见问题与解决方案
+
+#### 问题 1：错误未被正确分类
+
+**症状**：所有错误都显示为 SYS_UNKNOWN_ERROR
+
+**解决**：
+1. 检查 handleError 函数的错误判断逻辑
+2. 确保原始错误对象包含正确的信息
+3. 在 catch 块中添加 console.log(error) 查看原始错误
+
+#### 问题 2：重试次数过多
+
+**症状**：请求失败后一直重试
+
+**解决**：
+1. 检查 withRetry 的 maxRetries 配置
+2. 确认重试计数器正确递增
+3. 检查退出条件是否正确
+
+#### 问题 3：超时不生效
+
+**症状**：请求长时间等待，未触发超时
+
+**解决**：
+1. 确认 withTimeout 正确包装了 Promise
+2. 检查 Promise.race 是否正确实现
+3. 验证超时时间配置是否生效
+
+### 12.6 下一阶段准备工作
+
+完成第一阶段后，为第二阶段（数据持久化）做准备：
+
+**准备清单**：
+
+- [ ] 注册 Supabase 账号
+- [ ] 创建新的 Supabase 项目
+- [ ] 获取 Supabase 连接信息（URL、anon key）
+- [ ] 阅读 Supabase 文档（认证、数据库、RLS）
+- [ ] 设计数据库表结构（参考本文档第 4 节）
+- [ ] 准备数据迁移脚本（从 localStorage 导出数据）

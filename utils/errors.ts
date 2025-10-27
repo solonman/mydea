@@ -36,12 +36,27 @@ export function handleError(error: unknown): AppError {
     return error;
   }
   
-  // 网络错误
-  if (error instanceof TypeError && error.message.includes('fetch')) {
+  // 网络错误 - 包括 fetch 失败和离线状态
+  if (error instanceof TypeError && (
+    error.message.includes('fetch') ||
+    error.message.includes('Failed to fetch') ||
+    error.message.includes('NetworkError') ||
+    error.message.includes('Network request failed')
+  )) {
     return new AppError(
       'Network error',
       ErrorCodes.NETWORK_ERROR,
       '网络连接失败，请检查您的网络设置',
+      true
+    );
+  }
+  
+  // 检查是否是网络离线
+  if (!navigator.onLine) {
+    return new AppError(
+      'Offline',
+      ErrorCodes.NETWORK_ERROR,
+      '您当前处于离线状态，请检查网络连接',
       true
     );
   }

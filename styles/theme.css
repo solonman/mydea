@@ -1,0 +1,354 @@
+/* ============================================
+   Mydea 现代磨砂科技灰主题
+   方案 C: Modern Frosted Glass
+   ============================================ */
+
+/* CSS 变量定义 */
+:root {
+  /* ========== 背景色系 ========== */
+  --bg-primary: #0F1419;
+  --bg-secondary: #151B23;
+  --bg-elevated: #1C242E;
+  --bg-card: #1A2029;
+  
+  /* ========== 品牌色 - 柔和科技蓝 ========== */
+  --brand-blue: #3B82F6;
+  --brand-blue-light: #60A5FA;
+  --brand-blue-dark: #2563EB;
+  --brand-blue-darker: #1D4ED8;
+  
+  /* ========== 文字颜色 ========== */
+  --text-primary: #E5E7EB;
+  --text-secondary: #9CA3AF;
+  --text-tertiary: #6B7280;
+  --text-muted: #4B5563;
+  
+  /* ========== 边框颜色 ========== */
+  --border-subtle: #1F2937;
+  --border-default: #2D3748;
+  --border-strong: #374151;
+  
+  /* ========== 状态色 ========== */
+  --success: #10B981;
+  --warning: #F59E0B;
+  --error: #EF4444;
+  --info: #3B82F6;
+  
+  /* ========== 透明度 ========== */
+  --glass-bg: rgba(28, 36, 46, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-highlight: rgba(255, 255, 255, 0.05);
+  
+  /* ========== 阴影 ========== */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.3);
+  
+  /* ========== 动画时间 ========== */
+  --duration-fast: 0.2s;
+  --duration-normal: 0.3s;
+  --duration-slow: 0.5s;
+  
+  /* ========== 缓动函数 ========== */
+  --ease-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.6, 1);
+}
+
+/* ========== 基础样式重置 ========== */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: 'Poppins', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ========== 磨砂玻璃卡片 ========== */
+.card-glass {
+  background: linear-gradient(
+    135deg,
+    rgba(31, 41, 55, 0.7) 0%,
+    rgba(28, 36, 46, 0.8) 100%
+  );
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  box-shadow: 
+    var(--shadow-lg),
+    inset 0 1px 0 var(--glass-highlight);
+  border-radius: 16px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* 顶部高光效果 */
+.card-glass::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 50%;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.03) 0%,
+    transparent 100%
+  );
+  border-radius: 16px 16px 0 0;
+  pointer-events: none;
+}
+
+.card-glass:hover {
+  border-color: rgba(59, 130, 246, 0.15);
+  box-shadow: 
+    0 12px 24px -5px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(59, 130, 246, 0.1),
+    inset 0 1px 0 var(--glass-highlight);
+}
+
+/* ========== 主按钮 ========== */
+.btn-primary {
+  background: linear-gradient(135deg, var(--brand-blue) 0%, var(--brand-blue-dark) 100%);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  box-shadow: 
+    0 4px 12px rgba(59, 130, 246, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  color: #FFFFFF;
+  font-weight: 600;
+  border-radius: 12px;
+  padding: 12px 32px;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all var(--duration-normal) var(--ease-out);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.btn-primary:not(:disabled):hover {
+  background: linear-gradient(135deg, var(--brand-blue-dark) 0%, var(--brand-blue-darker) 100%);
+  box-shadow: 
+    0 8px 20px rgba(59, 130, 246, 0.35),
+    0 0 30px rgba(59, 130, 246, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+}
+
+.btn-primary:not(:disabled):active {
+  transform: translateY(0);
+  box-shadow: 
+    0 2px 8px rgba(59, 130, 246, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* ========== 次级按钮 ========== */
+.btn-secondary {
+  background: transparent;
+  border: 1.5px solid var(--border-strong);
+  color: var(--text-secondary);
+  border-radius: 12px;
+  padding: 10px 24px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--duration-normal) ease;
+}
+
+.btn-secondary:hover {
+  background: rgba(55, 65, 81, 0.3);
+  border-color: #4B5563;
+  color: var(--text-primary);
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.1);
+}
+
+/* ========== 输入框 ========== */
+.input-modern {
+  background: rgba(15, 20, 25, 0.8);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1.5px solid var(--border-default);
+  border-radius: 12px;
+  color: var(--text-primary);
+  padding: 14px 18px;
+  font-size: 15px;
+  width: 100%;
+  transition: all var(--duration-normal) ease;
+  font-family: inherit;
+}
+
+.input-modern::placeholder {
+  color: var(--text-tertiary);
+  font-weight: 400;
+}
+
+.input-modern:focus {
+  outline: none;
+  background: rgba(15, 20, 25, 0.95);
+  border-color: rgba(59, 130, 246, 0.5);
+  box-shadow: 
+    0 0 0 4px rgba(59, 130, 246, 0.1),
+    0 0 24px rgba(59, 130, 246, 0.15);
+}
+
+/* ========== 标题样式 ========== */
+.heading-gradient {
+  background: linear-gradient(135deg, #60A5FA 0%, #3B82F6 50%, #2563EB 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 700;
+}
+
+/* ========== 动画 ========== */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+
+/* 延迟动画 */
+.animate-delay-100 {
+  animation-delay: 0.1s;
+}
+
+.animate-delay-200 {
+  animation-delay: 0.2s;
+}
+
+.animate-delay-300 {
+  animation-delay: 0.3s;
+}
+
+/* ========== Loading 动画 ========== */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* ========== 脉冲动画 ========== */
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(59, 130, 246, 0.5);
+  }
+}
+
+.pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* ========== 徽章 ========== */
+.badge-success {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  border-radius: 20px;
+  color: var(--success);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* ========== 工具类 ========== */
+.text-center {
+  text-align: center;
+}
+
+.flex {
+  display: flex;
+}
+
+.flex-col {
+  flex-direction: column;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.justify-center {
+  justify-content: center;
+}
+
+.gap-2 {
+  gap: 0.5rem;
+}
+
+.gap-4 {
+  gap: 1rem;
+}
+
+.mt-2 {
+  margin-top: 0.5rem;
+}
+
+.mt-4 {
+  margin-top: 1rem;
+}
+
+.mt-6 {
+  margin-top: 1.5rem;
+}
+
+.mt-8 {
+  margin-top: 2rem;
+}
+
+.mb-2 {
+  margin-bottom: 0.5rem;
+}
+
+.mb-4 {
+  margin-bottom: 1rem;
+}
+
+.mb-8 {
+  margin-bottom: 2rem;
+}
+
+.w-full {
+  width: 100%;
+}
+
+.max-w-md {
+  max-width: 28rem;
+}
+
+.mx-auto {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.p-8 {
+  padding: 2rem;
+}

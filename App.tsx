@@ -11,10 +11,23 @@ import ProjectDetails from './components/ProjectDetails';
 import HomeScreen from './components/HomeScreen';
 import * as db from './services/databaseService';
 import { refineBrief, generateCreativePackage, optimizeProposal, generateExecutionPlan } from './services/geminiService';
+import { 
+  getOrCreateUser, 
+  signUpWithEmail,
+  signInWithEmail,
+  getWeChatLoginUrl,
+  getCurrentAuthUser,
+  onAuthStateChange,
+  signOut as supabaseSignOut,
+  type User as SupabaseUser,
+  type AuthUser 
+} from './services/supabase';
+import { logger } from './utils/errors';
 
 const App: React.FC = () => {
   const [stage, setStage] = useState<Stage>(Stage.LOGIN);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [supabaseUser, setSupabaseUser] = useState<SupabaseUser | null>(null);
   
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [activeBriefId, setActiveBriefId] = useState<string | null>(null);
@@ -26,13 +39,59 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  
   // Session check on initial render
   useEffect(() => {
-    const sessionUser = db.getSessionUser();
-    if (sessionUser) {
-      handleLogin(sessionUser.username);
-    }
+    // 检查是否有 Supabase 认证会话
+    const checkAuth = async () => {
+      try {
+        const user = await getCurrentAuthUser();
+        if (user) {
+          setAuthUser(user);
+          // 从用户元数据中获取用户名
+          const username = user.user_metadata.username || user.email.split('@')[0];
+          await handleAutoLogin(username, user.id);
+        } else {
+          // 尝试 localStorage
+          const sessionUser = db.getSessionUser();
+          if (sessionUser) {
+            setCurrentUser(sessionUser);
+            setStage(Stage.HOME);
+          }
+        }
+      } catch (error) {
+        logger.error('Auth check failed', error as Error);
+      }
+    };
+
+    checkAuth();
+
+    // 监听认证状态变化
+    const unsubscribe = onAuthStateChange(async (user) => {
+      setAuthUser(user);
+      if (user) {
+        const username = user.user_metadata.username || user.email.split('@')[0];
+        await handleAutoLogin(username, user.id);
+      } else {
+        setCurrentUser(null);
+        setSupabaseUser(null);
+        setStage(Stage.LOGIN);
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
+
+  // Load user from Supabase when user logs in
+  useEffect(() => {
+    if (supabaseUser && currentUser) {
+      logger.info('User logged in with Supabase', { 
+        userId: supabaseUser.id, 
+        username: supabaseUser.username 
+      });
+    }
+  }, [supabaseUser, currentUser]);
 
   const resetState = () => {
     setActiveProjectId(null);
@@ -43,31 +102,125 @@ const App: React.FC = () => {
     setIsLoading(false);
   };
   
-  const handleLogin = (username: string) => {
-    const user = db.getUser(username);
-    if (user) {
-      setCurrentUser(user);
-      db.setSessionUser(user);
+  // 自动登录（从认证会话恢复）
+  const handleAutoLogin = async (username: string, authUserId: string) => {
+    try {
+      // 获取 Supabase 用户
+      const sbUser = await getOrCreateUser(username);
+      setSupabaseUser(sbUser);
+      
+      // 获取 localStorage 用户
+      const user = db.getUser(username);
+      if (user) {
+        setCurrentUser(user);
+        db.setSessionUser(user);
+      } else {
+        const newUser = db.createUser(username);
+        setCurrentUser(newUser);
+        db.setSessionUser(newUser);
+      }
+      
       setStage(Stage.HOME);
-    } else {
-      setError("用户不存在");
+      logger.info('User auto-logged in', { username, authUserId });
+    } catch (error: any) {
+      logger.error('Auto-login failed', error);
     }
   };
 
-  const handleRegister = (username: string) => {
-    if (db.getUser(username)) {
-      setError("用户名已存在");
-      return;
+  // 邮箱注册
+  const handleEmailSignUp = async (email: string, password: string, username: string) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      logger.info('User attempting email signup', { email, username });
+      
+      const authUser = await signUpWithEmail({ email, password, username });
+      setAuthUser(authUser);
+      
+      // 显示验证提示
+      if (!authUser.email_confirmed_at) {
+        setError('注册成功！请检查您的邮箱并点击验证链接。');
+        return;
+      }
+      
+      // 如果邮箱已验证，直接登录
+      await handleAutoLogin(username, authUser.id);
+      
+    } catch (error: any) {
+      logger.error('Email signup failed', error);
+      setError(error.userMessage || '注册失败，请重试');
+    } finally {
+      setIsLoading(false);
     }
-    const newUser = db.createUser(username);
-    setCurrentUser(newUser);
-    db.setSessionUser(newUser);
-    setStage(Stage.HOME);
   };
 
-  const handleLogout = () => {
+  // 邮箱登录
+  const handleEmailSignIn = async (email: string, password: string) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      logger.info('User attempting email signin', { email });
+      
+      const authUser = await signInWithEmail({ email, password });
+      setAuthUser(authUser);
+      
+      // 检查邮箱是否验证
+      if (!authUser.email_confirmed_at) {
+        setError('请先验证您的邮箱后再登录。');
+        return;
+      }
+      
+      const username = authUser.user_metadata.username || email.split('@')[0];
+      await handleAutoLogin(username, authUser.id);
+      
+    } catch (error: any) {
+      logger.error('Email signin failed', error);
+      setError(error.userMessage || '登录失败，请重试');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 微信登录
+  const handleWeChatLogin = () => {
+    try {
+      logger.info('Initiating WeChat login');
+      
+      // 获取微信登录 URL
+      const wechatUrl = getWeChatLoginUrl({
+        appId: import.meta.env.VITE_WECHAT_APP_ID || 'YOUR_WECHAT_APP_ID',
+        redirectUri: `${window.location.origin}/auth/wechat/callback`,
+        state: crypto.randomUUID(),
+      });
+      
+      // 跳转到微信扫码页面
+      window.location.href = wechatUrl;
+      
+    } catch (error: any) {
+      logger.error('WeChat login initiation failed', error);
+      setError('微信登录开启失败，请重试');
+    }
+  };
+
+  const handleLogout = async () => {
+    logger.info('User logging out', { username: currentUser?.username });
+    
+    // 清理 Supabase 认证
+    if (authUser) {
+      try {
+        await supabaseSignOut();
+      } catch (error) {
+        logger.error('Supabase signout failed', error as Error);
+      }
+    }
+    
+    // 清理本地存储
     db.clearSession();
     setCurrentUser(null);
+    setSupabaseUser(null);
+    setAuthUser(null);
     resetState();
     setStage(Stage.LOGIN);
   };
@@ -247,11 +400,35 @@ const App: React.FC = () => {
     }
   };
   
-  const handleFinish = () => {
+  const handleFinish = async () => {
     if (currentUser && activeProjectId && currentRun?.id && currentRun.initialBrief && currentRun.refinedBriefText && currentRun.proposals) {
       const completeRun = currentRun as BriefHistoryItem;
-      const updatedUser = db.addOrUpdateBrief(currentUser.username, activeProjectId, completeRun);
-      setCurrentUser(updatedUser);
+      
+      try {
+        // 保存到 Supabase（如果已登录）
+        if (supabaseUser) {
+          const { createBrief } = await import('./services/supabase');
+          await createBrief({
+            project_id: activeProjectId,
+            initial_brief: completeRun.initialBrief,
+            refined_brief_text: completeRun.refinedBriefText,
+            inspirations: completeRun.inspirations,
+            proposals: completeRun.proposals,
+            status: 'completed',
+          });
+          logger.info('Brief saved to Supabase', { briefId: completeRun.id });
+        }
+        
+        // 同时保存到 localStorage（向后兼容）
+        const updatedUser = db.addOrUpdateBrief(currentUser.username, activeProjectId, completeRun);
+        setCurrentUser(updatedUser);
+        
+      } catch (error) {
+        logger.error('Failed to save brief', error as Error);
+        // 即使保存失败，也继续执行（用户可以稍后重试）
+        const errorMsg = error instanceof Error ? error.message : '保存失败';
+        setError(`保存创意任务时出错：${errorMsg}。数据已保存到本地缓存。`);
+      }
     }
     resetState();
     setStage(Stage.HOME);
@@ -282,14 +459,26 @@ const App: React.FC = () => {
     
     switch (stage) {
       case Stage.LOGIN:
-        return <LoginScreen onLogin={handleLogin} onRegister={handleRegister} />;
+        return <LoginScreen 
+          onEmailSignUp={handleEmailSignUp} 
+          onEmailSignIn={handleEmailSignIn}
+          onWeChatLogin={handleWeChatLogin}
+          isLoading={isLoading} 
+        />;
       case Stage.HOME:
-        return currentUser && <HomeScreen user={currentUser} onCreateProject={handleCreateProject} onBriefSubmit={handleBriefSubmit} isLoading={isLoading}/>;
+        return currentUser && <HomeScreen user={currentUser} supabaseUser={supabaseUser} onCreateProject={handleCreateProject} onBriefSubmit={handleBriefSubmit} isLoading={isLoading}/>;
       case Stage.PROJECT_DASHBOARD:
-        return currentUser && <ProjectDashboard user={currentUser} onCreateProject={handleCreateProject} onViewProject={handleViewProject} />;
+        return currentUser && <ProjectDashboard user={currentUser} supabaseUser={supabaseUser} onCreateProject={handleCreateProject} onViewProject={handleViewProject} />;
       case Stage.PROJECT_DETAILS:
         const project = currentUser?.projects.find(p => p.id === activeProjectId);
-        return project && <ProjectDetails project={project} onStartNewBrief={handleStartNewBriefFromProject} onViewBrief={(b) => handleViewBriefResults(b, project.id)} onDeleteBrief={handleDeleteBrief} />;
+        // If project not found in localStorage but we have activeProjectId, create a minimal project object
+        const projectToShow = project || (activeProjectId ? {
+          id: activeProjectId,
+          name: '项目详情',
+          briefs: [],
+          createdAt: new Date().toISOString()
+        } as Project : null);
+        return projectToShow && <ProjectDetails project={projectToShow} supabaseUser={supabaseUser} onStartNewBrief={handleStartNewBriefFromProject} onViewBrief={(b) => handleViewBriefResults(b, projectToShow.id)} onDeleteBrief={handleDeleteBrief} />;
       case Stage.BRIEF_REFINEMENT:
         return refinementData && currentRun?.initialBrief ? (
           <BriefRefinement brief={currentRun.initialBrief} refinementData={refinementData} onSubmit={handleRefinementSubmit} isLoading={isLoading} />
@@ -309,7 +498,12 @@ const App: React.FC = () => {
             />
         ) : <GeneratingView status="finished" />;
       default:
-        return <LoginScreen onLogin={handleLogin} onRegister={handleRegister} />;
+        return <LoginScreen 
+          onEmailSignUp={handleEmailSignUp} 
+          onEmailSignIn={handleEmailSignIn}
+          onWeChatLogin={handleWeChatLogin}
+          isLoading={isLoading} 
+        />;
     }
   };
   

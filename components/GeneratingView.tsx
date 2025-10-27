@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { GeneratingStatus } from '../types';
 import LoadingSpinner from './LoadingSpinner';
@@ -7,28 +6,118 @@ interface GeneratingViewProps {
   status: GeneratingStatus;
 }
 
-const statusMessages: Record<GeneratingStatus, string> = {
-  analyzing: "正在分析您的需求...",
-  inspiring: "正在全球范围内搜索灵感...",
-  creating: "正在为您量身打造创意方案...",
-  finished: "生成完毕！"
+const statusConfig: Record<GeneratingStatus, { message: string; progress: number; icon: string }> = {
+  analyzing: { message: "正在分析您的需求...", progress: 25, icon: "🔍" },
+  inspiring: { message: "正在全球范围内搜索灵感...", progress: 55, icon: "🌍" },
+  creating: { message: "正在为您量身打造创意方案...", progress: 85, icon: "✨" },
+  finished: { message: "生成完毕！", progress: 100, icon: "🎉" }
 };
 
 const GeneratingView: React.FC<GeneratingViewProps> = ({ status }) => {
+  const config = statusConfig[status];
+  
   return (
-    <div className="flex flex-col items-center justify-center text-center p-12 bg-gray-800/50 backdrop-blur-sm rounded-2xl shadow-2xl border border-gray-700 animate-fade-in">
-      <LoadingSpinner className="w-16 h-16" />
-      <h2 className="text-2xl font-bold mt-8 text-gray-100">{statusMessages[status]}</h2>
-      <p className="text-gray-400 mt-2">请稍候，顶级的创意需要一点时间酝酿。</p>
-      
-      <div className="w-full max-w-md mt-10">
-        <div className="relative pt-1">
-          <div className="overflow-hidden h-2 mb-4 text-xs flex rounded bg-purple-900/50">
-            <div
-              style={{ width: `${status === 'analyzing' ? '10%' : status === 'inspiring' ? '40%' : '80%'}` }}
-              className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-500"
-            ></div>
+    <div className="flex flex-col items-center justify-center text-center animate-fade-in" style={{ padding: '80px 20px' }}>
+      <div className="card-glass" style={{ padding: '48px 40px', maxWidth: '600px', width: '100%' }}>
+        {/* Loading 动画 */}
+        <div style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: '80px',
+          height: '80px',
+          borderRadius: '50%',
+          background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(37, 99, 235, 0.2))',
+          marginBottom: '24px',
+          animation: 'pulse-glow 2s ease-in-out infinite'
+        }}>
+          <LoadingSpinner className="w-12 h-12" />
+        </div>
+
+        {/* 状态图标 */}
+        <div style={{
+          fontSize: '48px',
+          marginBottom: '16px',
+          animation: 'fadeInUp 0.6s ease'
+        }}>
+          {config.icon}
+        </div>
+
+        {/* 状态文字 */}
+        <h2 style={{
+          fontSize: '24px',
+          fontWeight: '700',
+          color: 'var(--text-primary)',
+          marginBottom: '12px',
+          letterSpacing: '-0.01em'
+        }}>
+          {config.message}
+        </h2>
+        
+        <p style={{
+          fontSize: '14px',
+          color: 'var(--text-tertiary)',
+          marginBottom: '32px'
+        }}>
+          请稍候，顶级的创意需要一点时间酝酿。
+        </p>
+        
+        {/* 进度条 */}
+        <div style={{ width: '100%', maxWidth: '400px', margin: '0 auto' }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '8px'
+          }}>
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+              进度
+            </span>
+            <span style={{
+              fontSize: '13px',
+              fontWeight: '600',
+              color: 'var(--brand-blue-light)'
+            }}>
+              {config.progress}%
+            </span>
           </div>
+          <div style={{
+            width: '100%',
+            height: '8px',
+            background: 'rgba(59, 130, 246, 0.1)',
+            borderRadius: '4px',
+            overflow: 'hidden',
+            border: '1px solid rgba(59, 130, 246, 0.2)'
+          }}>
+            <div
+              style={{
+                width: `${config.progress}%`,
+                height: '100%',
+                background: 'linear-gradient(90deg, #3B82F6 0%, #60A5FA 100%)',
+                borderRadius: '4px',
+                transition: 'width 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
+                boxShadow: '0 0 10px rgba(59, 130, 246, 0.5)'
+              }}
+            />
+          </div>
+        </div>
+
+        {/* 提示文字 */}
+        <div style={{
+          marginTop: '32px',
+          padding: '16px',
+          background: 'rgba(59, 130, 246, 0.05)',
+          borderRadius: '12px',
+          border: '1px solid rgba(59, 130, 246, 0.1)'
+        }}>
+          <p style={{
+            fontSize: '13px',
+            color: 'var(--text-secondary)',
+            margin: 0,
+            lineHeight: '1.6'
+          }}>
+            💡 <strong>温馨提示：</strong> AI 正在综合全球最佳案例和您的需求，为您量身定制创意方案
+          </p>
         </div>
       </div>
     </div>
