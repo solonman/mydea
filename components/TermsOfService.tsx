@@ -1,72 +1,10 @@
 import React from 'react';
-import ReactMarkdown from 'react-markdown';
 
 interface TermsOfServiceProps {
   onBack: () => void;
 }
 
 const TermsOfService: React.FC<TermsOfServiceProps> = ({ onBack }) => {
-  // 从文件中读取的原始Markdown内容
-  const markdownContent = `# Mydea 服务条款
-
-欢迎使用 Mydea！本服务条款适用于您对 Mydea 的使用。
-
-## 1. 服务描述
-
-Mydea 是一款 AI 广告创意助手，旨在帮助用户：
-- 智能分析创意需求
-- 获取全球创意灵感
-- 生成多种风格的创意方案
-- 迭代优化创意内容
-- 生成执行计划
-
-## 2. 用户账户
-
-### 2.1 账户注册
-- 您需要注册账户才能使用 Mydea 的完整功能
-- 您应提供真实、准确的信息
-- 您负责维护账户安全
-
-### 2.2 账户安全
-- 您应对账户密码保密
-- 如发现账户异常，请立即联系我们
-- 禁止与他人共享账户
-
-## 3. 用户权利与义务
-
-### 3.1 您的权利
-- 使用 Mydea 生成创意内容
-- 查看和管理您的项目
-- 导出创意成果
-
-### 3.2 您的义务
-- 遵守法律法规
-- 不得用于非法用途
-- 尊重他人知识产权
-- 不得逆向工程或破解服务
-
-## 4. 内容所有权
-
-### 4.1 用户内容
-您保留对通过 Mydea 创建的内容的所有权。
-
-### 4.2 服务内容
-Mydea 的界面、功能、技术等知识产权归 Mydea 团队所有。
-
-## 5. 服务变更与终止
-
-我们保留在任何时候修改或终止服务的权利，但会提前通知用户。
-
-## 6. 免责声明
-
-Mydea 按"现状"提供，不保证服务的连续性和准确性。
-
-## 7. 联系我们
-
-如有疑问，请通过以下方式联系我们：
-- 邮箱：support@mydea.example.com
-
-*最后更新：2025年10月27日*`;
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-4">
@@ -83,21 +21,110 @@ Mydea 按"现状"提供，不保证服务的连续性和准确性。
           </button>
         </div>
 
-        <div className="card-glass p-6 prose prose-invert max-w-none">
-          <ReactMarkdown
-            components={{
-              h1: ({node, ...props}) => <h1 className="text-2xl font-bold mb-4" {...props} />,
-              h2: ({node, ...props}) => <h2 className="text-xl font-semibold mt-6 mb-3" {...props} />,
-              h3: ({node, ...props}) => <h3 className="text-lg font-medium mt-4 mb-2" {...props} />,
-              p: ({node, ...props}) => <p className="mb-3" {...props} />,
-              ul: ({node, ...props}) => <ul className="list-disc pl-5 mb-4" {...props} />,
-              ol: ({node, ...props}) => <ol className="list-decimal pl-5 mb-4" {...props} />,
-              li: ({node, ...props}) => <li className="mb-1" {...props} />,
-              em: ({node, ...props}) => <em className="text-gray-400" {...props} />
-            }}
-          >
-            {markdownContent}
-          </ReactMarkdown>
+        <div className="card-glass p-8 space-y-6">
+          <section>
+            <h2 className="text-xl font-semibold mb-4">Mydea 服务条款</h2>
+            <p className="text-gray-300 leading-relaxed">
+              欢迎使用 Mydea！本服务条款適用于您对 Mydea 的使用。
+            </p>
+          </section>
+
+          <section>
+            <h3 className="text-lg font-semibold mb-3">1. 服务描述</h3>
+            <p className="text-gray-300 mb-2">Mydea 是一款 AI 广告创意助手，旨在帮助用户：</p>
+            <ul className="list-disc ml-8 text-gray-300 space-y-1">
+              <li>智能分析创意需求</li>
+              <li>获取全球创意灵感</li>
+              <li>生成多种风格的创意方案</li>
+              <li>迭代优化创意内容</li>
+              <li>生成执行计划</li>
+            </ul>
+          </section>
+
+          <section>
+            <h3 className="text-lg font-semibold mb-3">2. 用户账户</h3>
+            <div className="space-y-3 text-gray-300">
+              <div>
+                <h4 className="font-medium text-white mb-2">2.1 账户注册</h4>
+                <ul className="list-disc ml-8 space-y-1">
+                  <li>您需要注册账户才能使用 Mydea 的完整功能</li>
+                  <li>您应提供真实、准确的信息</li>
+                  <li>您负责维护账户安全</li>
+                </ul>
+              </div>
+              <div>
+                <h4 className="font-medium text-white mb-2">2.2 账户安全</h4>
+                <ul className="list-disc ml-8 space-y-1">
+                  <li>您应对账户密码保密</li>
+                  <li>如发现账户异常，请立即联系我们</li>
+                  <li>禁止与他人共享账户</li>
+                </ul>
+              </div>
+            </div>
+          </section>
+
+          <section>
+            <h3 className="text-lg font-semibold mb-3">3. 用户权利与义务</h3>
+            <div className="space-y-3 text-gray-300">
+              <div>
+                <h4 className="font-medium text-white mb-2">3.1 您的权利</h4>
+                <ul className="list-disc ml-8 space-y-1">
+                  <li>使用 Mydea 生成创意内容</li>
+                  <li>查看和管理您的项目</li>
+                  <li>导出创意成果</li>
+                </ul>
+              </div>
+              <div>
+                <h4 className="font-medium text-white mb-2">3.2 您的义务</h4>
+                <ul className="list-disc ml-8 space-y-1">
+                  <li>遵守法律法规</li>
+                  <li>不得用于非法用途</li>
+                  <li>尊重他人知识产权</li>
+                  <li>不得逼向工程或破解服务</li>
+                </ul>
+              </div>
+            </div>
+          </section>
+
+          <section>
+            <h3 className="text-lg font-semibold mb-3">4. 内容所有权</h3>
+            <div className="space-y-3 text-gray-300">
+              <div>
+                <h4 className="font-medium text-white mb-2">4.1 用户内容</h4>
+                <p>您保留对通过 Mydea 创建的内容的所有权。</p>
+              </div>
+              <div>
+                <h4 className="font-medium text-white mb-2">4.2 服务内容</h4>
+                <p>Mydea 的界面、功能、技术等知识产权归 Mydea 团队所有。</p>
+              </div>
+            </div>
+          </section>
+
+          <section>
+            <h3 className="text-lg font-semibold mb-3">5. 服务变更与终止</h3>
+            <p className="text-gray-300">
+              我们保留在任何时候修改或终止服务的权利，但会提前通知用户。
+            </p>
+          </section>
+
+          <section>
+            <h3 className="text-lg font-semibold mb-3">6. 免责声明</h3>
+            <p className="text-gray-300">
+              Mydea 按“现状”提供，不保证服务的連续性和准确性。
+            </p>
+          </section>
+
+          <section>
+            <h3 className="text-lg font-semibold mb-3">7. 联系我们</h3>
+            <p className="text-gray-300">
+              如有疑问，请通过以下方式联系我们：<br />
+              邮箱：support@mydea.example.com
+            </p>
+          </section>
+
+          <p className="text-gray-400 text-sm pt-4 border-t border-gray-700">
+            最后更新：2025年10月27日
+          </p>
         </div>
       </div>
     </div>

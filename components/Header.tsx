@@ -41,11 +41,18 @@ const Header: React.FC<HeaderProps> = ({ onNavigateToDashboard, onLogout, onBack
       <header className="flex justify-between items-center pb-8">
         {/* 左侧：Logo 和 Slogan */}
         <div className="flex items-center gap-3 cursor-pointer" onClick={onBackToHome}>
+          <img 
+            src="/logo.png" 
+            alt="Mydea Logo" 
+            style={{
+              width: '120px',
+              height: 'auto',
+              objectFit: 'contain',
+              borderRadius: '8px'
+            }}
+          />
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-500 to-red-500 hover:opacity-80 transition-opacity">
-              Mydea
-            </h1>
-            <p className="text-xs text-gray-400 hidden sm:block">
+            <p className="text-sm text-gray-400 hidden sm:block">
               AI时代的创意之道
             </p>
           </div>

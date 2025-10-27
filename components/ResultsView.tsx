@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import type { InspirationCase, CreativeProposal } from '../types';
 import { useLanguage } from '../i18n/useLanguage';
 import LoadingSpinner from './LoadingSpinner';
+import InspirationDetail from './InspirationDetail';
 
 // A simple markdown renderer
 const SimpleMarkdown: React.FC<{ text: string }> = ({ text }) => {
@@ -454,132 +455,134 @@ interface ResultsViewProps {
 
 const ResultsView: React.FC<ResultsViewProps> = ({ inspirations, proposals, onFinish, onOptimize, onExecute, onPromoteAndExecute, isProcessing }) => {
   const { t } = useLanguage();
+  const [selectedInspirationIndex, setSelectedInspirationIndex] = useState<number | null>(null);
+  
+  const selectedInspiration = selectedInspirationIndex !== null ? inspirations[selectedInspirationIndex] : null;
   return (
-    <div className="animate-fade-in" style={{ padding: '0 20px', maxWidth: '1200px', margin: '0 auto' }}>
-      {/* 灵感探索区 */}
-      <div style={{ marginBottom: '64px' }}>
-        <div style={{ textAlign: 'center', marginBottom: '40px' }}>
-          <h2 className="heading-gradient" style={{
-            fontSize: '32px',
-            marginBottom: '12px',
-            letterSpacing: '-0.02em'
+    <>
+      {selectedInspiration && (
+        <InspirationDetail
+          case={selectedInspiration}
+          onClose={() => setSelectedInspirationIndex(null)}
+        />
+      )}
+      <div className="animate-fade-in" style={{ padding: '0 20px', maxWidth: '1200px', margin: '0 auto' }}>
+        {/* 灵感探索区 */}
+        <div style={{ marginBottom: '64px' }}>
+          <div style={{ textAlign: 'center', marginBottom: '40px' }}>
+            <h2 className="heading-gradient" style={{
+              fontSize: '32px',
+              marginBottom: '12px',
+              letterSpacing: '-0.02em'
+            }}>
+              {t('globalInspirationExploration')}
+            </h2>
+            <p style={{ fontSize: '15px', color: 'var(--text-secondary)' }}>
+              {t('getInspiredFromExcellentCases')}
+            </p>
+          </div>
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', 
+            gap: '24px' 
           }}>
-            {t('globalInspirationExploration')}
-          </h2>
-          <p style={{ fontSize: '15px', color: 'var(--text-secondary)' }}>
-            {t('getInspiredFromExcellentCases')}
-          </p>
+            {inspirations.map((item, index) => (
+              <button
+                key={index}
+                onClick={() => setSelectedInspirationIndex(index)}
+                className="card-glass animate-fade-in"
+                style={{
+                  padding: 0,
+                  overflow: 'hidden',
+                  animationDelay: `${index * 0.1}s`,
+                  transition: 'transform 0.3s ease, box-shadow 0.3s ease',
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: 'inherit',
+                  width: '100%',
+                  textAlign: 'left'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-4px)';
+                  e.currentTarget.style.boxShadow = '0 12px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(59, 130, 246, 0.2)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '';
+                }}
+              >
+                <img src={item.imageUrl} alt={item.title} style={{ width: '100%', height: '200px', objectFit: 'cover', display: 'block' }} />
+                <div style={{ padding: '20px' }}>
+                  <h3 style={{ fontSize: '17px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '8px' }}>
+                    {item.title}
+                  </h3>
+                  {item.relevanceScore !== undefined && (
+                    <p style={{ fontSize: '12px', color: '#22C55E', marginBottom: '8px', fontWeight: '600' }}>
+                      相关度: {item.relevanceScore}%
+                    </p>
+                  )}
+                  <p style={{ fontSize: '13px', color: 'var(--brand-blue-light)', marginBottom: '8px', fontWeight: '500' }}>
+                    ✨ 创意亮点
+                  </p>
+                  <p style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: '1.6', marginBottom: '12px' }}>
+                    {item.highlight}
+                  </p>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '12px', color: 'var(--brand-blue)', fontWeight: '500' }}>点击查看详情 →</span>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
         </div>
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', 
-          gap: '24px' 
-        }}>
-          {inspirations.map((item, index) => (
-            <div 
-              key={index} 
-              className="card-glass animate-fade-in"
-              style={{
-                padding: 0,
-                overflow: 'hidden',
-                animationDelay: `${index * 0.1}s`,
-                transition: 'transform 0.3s ease, box-shadow 0.3s ease'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'translateY(-4px)';
-                e.currentTarget.style.boxShadow = '0 12px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(59, 130, 246, 0.2)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = '';
-              }}
-            >
-              <img src={item.imageUrl} alt={item.title} style={{ width: '100%', height: '200px', objectFit: 'cover' }} />
-              <div style={{ padding: '20px' }}>
-                <h3 style={{ fontSize: '17px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '8px' }}>
-                  {item.title}
-                </h3>
-                <p style={{ fontSize: '13px', color: 'var(--brand-blue-light)', marginBottom: '8px', fontWeight: '500' }}>
-                  ✨ 创意亮点
-                </p>
-                <p style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: '1.6', marginBottom: '12px' }}>
-                  {item.highlight}
-                </p>
-                {item.sourceUrl && (
-                  <a 
-                    href={item.sourceUrl} 
-                    target="_blank" 
-                    rel="noopener noreferrer" 
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      fontSize: '13px',
-                      color: 'var(--brand-blue)',
-                      textDecoration: 'none',
-                      transition: 'color 0.2s'
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.color = 'var(--brand-blue-light)'}
-                    onMouseLeave={(e) => e.currentTarget.style.color = 'var(--brand-blue)'}
-                  >
-                    查看来源
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M3 9L9 3M9 3H5M9 3V7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  </a>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
 
-      {/* 创意方案区 */}
-      <div>
-        <div style={{ textAlign: 'center', marginBottom: '40px' }}>
-          <h2 className="heading-gradient" style={{
-            fontSize: '32px',
-            marginBottom: '12px',
-            letterSpacing: '-0.02em'
-          }}>
-            {t('generatedCreativeProposals')}
-          </h2>
-          <p style={{ fontSize: '15px', color: 'var(--text-secondary)' }}>
-            {t('baseOnAIAnalysis')}
-          </p>
+        {/* 创意方案区 */}
+        <div>
+          <div style={{ textAlign: 'center', marginBottom: '40px' }}>
+            <h2 className="heading-gradient" style={{
+              fontSize: '32px',
+              marginBottom: '12px',
+              letterSpacing: '-0.02em'
+            }}>
+              {t('generatedCreativeProposals')}
+            </h2>
+            <p style={{ fontSize: '15px', color: 'var(--text-secondary)' }}>
+              {t('baseOnAIAnalysis')}
+            </p>
+          </div>
+          <div style={{ display: 'grid', gap: '24px' }}>
+            {proposals.map((proposal, index) => (
+              <ProposalCard 
+                key={proposal.id + proposal.version} 
+                proposal={proposal} 
+                index={index} 
+                onOptimize={onOptimize} 
+                onExecute={onExecute} 
+                onPromoteAndExecute={onPromoteAndExecute}
+                isProcessing={isProcessing}
+                t={t}
+              />
+            ))}
+          </div>
         </div>
-        <div style={{ display: 'grid', gap: '24px' }}>
-          {proposals.map((proposal, index) => (
-    <ProposalCard 
-              key={proposal.id + proposal.version} 
-              proposal={proposal} 
-              index={index} 
-              onOptimize={onOptimize} 
-              onExecute={onExecute} 
-              onPromoteAndExecute={onPromoteAndExecute}
-              isProcessing={isProcessing}
-              t={t}
-            />
-          ))}
+        
+        {/* 完成按钮 */}
+        <div style={{ textAlign: 'center', paddingTop: '48px', paddingBottom: '32px' }}>
+          <button
+            onClick={onFinish}
+            className="btn-primary"
+            style={{ padding: '14px 48px', fontSize: '16px', minWidth: '240px' }}
+          >
+            <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5 13L9 17L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              <span>{t('completeAndSave')}</span>
+            </span>
+          </button>
         </div>
       </div>
-      
-      {/* 完成按钮 */}
-      <div style={{ textAlign: 'center', paddingTop: '48px', paddingBottom: '32px' }}>
-        <button
-          onClick={onFinish}
-          className="btn-primary"
-          style={{ padding: '14px 48px', fontSize: '16px', minWidth: '240px' }}
-        >
-          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M5 13L9 17L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            <span>{t('completeAndSave')}</span>
-          </span>
-        </button>
-      </div>
-    </div>
+    </>
   );
 };
 

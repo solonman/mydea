@@ -108,13 +108,19 @@ export async function refineBrief(briefText: string, creativeType: string, proje
 async function getInspirations(refinedBrief: string, creativeType: string): Promise<InspirationCase[]> {
   const model = 'gemini-2.5-flash';
 
-  // Step 1: Search for recent campaigns using Google Search
-  const searchPrompt = `Search for the most recent successful advertising campaigns and creative cases from 2023-2025 that match:
+  // Step 1: Search for recent campaigns using Google Search with enhanced criteria
+  const searchPrompt = `Search for the most recent successful advertising campaigns and creative cases from 2023-2025 that match these criteria:
   
 Creative Type: ${creativeType}
-Brief: ${refinedBrief}
+Brief Requirements: ${refinedBrief}
 
-Find 3 specific, real campaign examples with their names, URLs, and brief descriptions.`;
+Must find cases that are:
+- HIGHLY RELEVANT (at least 80% match to the creative type and brief)
+- From well-known brands or agencies
+- Successful in terms of awards, engagement, or business results
+- Recent (2023-2025 preferred, but 2022-2025 acceptable)
+
+Find 3 specific, real campaign examples with their official names, source URLs, and detailed descriptions.`;
 
   try {
     logger.info('Fetching inspirations', { creativeType });
@@ -141,7 +147,7 @@ Find 3 specific, real campaign examples with their names, URLs, and brief descri
 
     logger.info('Search results obtained', { resultLength: searchResults.length });
 
-    // Step 2: Parse search results and generate structured data
+    // Step 2: Parse search results and generate structured data with enhanced relevance scoring
     const parsePrompt = `Based on these search results about advertising campaigns, extract and analyze 3 campaigns:
 
 ${searchResults}
@@ -151,14 +157,18 @@ For each campaign, provide a JSON object with these exact fields:
   "title": "Campaign/Product name",
   "highlight": "Key creative insight or unique selling point in Chinese",
   "category": "${creativeType}",
-  "relevanceScore": <number 0-100 indicating relevance to the brief>,
-  "detailedDescription": "Detailed explanation of the campaign strategy and execution in Chinese",
-  "keyInsights": "Core innovative points or breakthrough thinking in Chinese",
-  "targetAudience": "Target demographic description",
-  "industry": "Industry category"
+  "relevanceScore": <number 0-100 indicating relevance to brief. MUST be >= 80 for high relevance matches>,
+  "detailedDescription": "Detailed explanation of the campaign strategy and execution in Chinese (2-3 sentences)",
+  "keyInsights": "Core innovative points or breakthrough thinking that makes this case valuable in Chinese (2-3 sentences)",
+  "targetAudience": "Target demographic description in Chinese",
+  "industry": "Industry category in Chinese"
 }
 
-Return ONLY a JSON array with exactly 3 objects, no markdown, no explanations.`;
+IMPORTANT:
+1. Only return campaigns where relevanceScore >= 75
+2. Be strict with relevance scoring - only score high if the case directly matches the creative type and brief requirements
+3. Provide insightful, actionable detailedDescription and keyInsights
+4. Return ONLY a JSON array with 3 objects maximum, no markdown, no explanations.`;
 
     const result = await withTimeoutAndRetry(
       async () => {
@@ -173,20 +183,42 @@ Return ONLY a JSON array with exactly 3 objects, no markdown, no explanations.`;
         const jsonText = response.text.trim().replace(/^```json\s*|```\s*$/g, '');
         const parsedInspirations = JSON.parse(jsonText) as any[];
         
-        return parsedInspirations.slice(0, 3).map((insp) => {
-          return {
-            title: insp.title || '案例',
-            highlight: insp.highlight || '',
-            category: insp.category || creativeType,
-            relevanceScore: Math.min(100, Math.max(0, insp.relevanceScore || 85)),
-            detailedDescription: insp.detailedDescription || '',
-            keyInsights: insp.keyInsights || insp.highlight || '',
-            targetAudience: insp.targetAudience || '通用',
-            industry: insp.industry || '广告',
-            imageUrl: `https://picsum.photos/seed/${encodeURIComponent(insp.title || '案例')}/600/400`,
-            sourceUrl: insp.sourceUrl,
-          } as InspirationCase;
-        });
+        // Filter and ensure high-quality results with proper relevance scoring
+        const validInspirations = parsedInspirations
+          .filter(insp => (insp.relevanceScore || 0) >= 75) // 只返回相关度 >= 75 的案例
+          .slice(0, 3)
+          .map((insp) => {
+            const relevanceScore = Math.min(100, Math.max(0, insp.relevanceScore || 85));
+            return {
+              title: insp.title || '案例',
+              highlight: insp.highlight || '',
+              category: insp.category || creativeType,
+              relevanceScore: relevanceScore,
+              detailedDescription: insp.detailedDescription || '',
+              keyInsights: insp.keyInsights || insp.highlight || '',
+              targetAudience: insp.targetAudience || '通用',
+              industry: insp.industry || '广告',
+              imageUrl: `https://picsum.photos/seed/${encodeURIComponent(insp.title || '案例')}/600/400`,
+              sourceUrl: insp.sourceUrl,
+            } as InspirationCase;
+          });
+        
+        // 如果案例数不足，返回现有的（通常意味着网络搜索没有找到足够高相关度的案例）
+        return validInspirations.length > 0 ? validInspirations : 
+          parsedInspirations.slice(0, 3).map((insp) => {
+            return {
+              title: insp.title || '案例',
+              highlight: insp.highlight || '',
+              category: insp.category || creativeType,
+              relevanceScore: Math.min(100, Math.max(0, insp.relevanceScore || 75)),
+              detailedDescription: insp.detailedDescription || '',
+              keyInsights: insp.keyInsights || insp.highlight || '',
+              targetAudience: insp.targetAudience || '通用',
+              industry: insp.industry || '广告',
+              imageUrl: `https://picsum.photos/seed/${encodeURIComponent(insp.title || '案例')}/600/400`,
+              sourceUrl: insp.sourceUrl,
+            } as InspirationCase;
+          });
       },
       {
         timeoutMs: 30000,

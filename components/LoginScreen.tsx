@@ -43,23 +43,21 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
       <div className="card-glass p-8 animate-fade-in">
         {/* Logo 区域 */}
         <div className="text-center mb-8">
-          <div className="inline-block p-3" style={{
-            background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(37, 99, 235, 0.1) 100%)',
-            borderRadius: '16px',
+          <div className="inline-block" style={{
             marginBottom: '16px'
           }}>
-            <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M24 4L6 14V34L24 44L42 34V14L24 4Z" stroke="#3B82F6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M24 24L42 14" stroke="#60A5FA" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M24 24L6 14" stroke="#60A5FA" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M24 24V44" stroke="#60A5FA" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            <img 
+              src="/logo.png" 
+              alt="Mydea Logo" 
+              style={{
+                width: '150px',
+                height: 'auto',
+                objectFit: 'contain'
+              }}
+            />
           </div>
-          <h1 className="heading-gradient" style={{ fontSize: '32px', marginBottom: '8px', letterSpacing: '-0.02em' }}>
-            {authMode === 'signup' ? '创建账户' : 'Mydea'}
-          </h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '15px', margin: 0 }}>
-            {authMode === 'signup' ? '开启您的 AI 创意之旅' : '您的专属 AI 广告创意伙伴'}
+            {authMode === 'signup' ? 'AI时代的创意之道' : 'AI时代的创意之道'}
           </p>
         </div>
 
