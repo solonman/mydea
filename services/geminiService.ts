@@ -108,19 +108,19 @@ export async function refineBrief(briefText: string, creativeType: string, proje
 async function getInspirations(refinedBrief: string, creativeType: string): Promise<InspirationCase[]> {
   const model = 'gemini-2.5-flash';
 
-  // Step 1: Search for recent campaigns using Google Search with enhanced criteria
-  const searchPrompt = `Search for the most recent successful advertising campaigns and creative cases from 2023-2025 that match these criteria:
+  // Step 1: Search for recent campaigns using Google Search with relaxed criteria
+  const searchPrompt = `Search for successful advertising campaigns and creative cases from 2022-2025 that match the user's creative type and brief requirements.
   
 Creative Type: ${creativeType}
-Brief Requirements: ${refinedBrief}
+User Brief: ${refinedBrief}
 
-Must find cases that are:
-- HIGHLY RELEVANT (at least 80% match to the creative type and brief)
-- From well-known brands or agencies
-- Successful in terms of awards, engagement, or business results
-- Recent (2023-2025 preferred, but 2022-2025 acceptable)
+Find 5-10 specific, real campaign examples with their official names, source URLs, and brief descriptions. Include a variety of well-known brands, startups, and creative agencies. Focus on:
+- Campaigns that demonstrate similar creative approaches or themes
+- Cases from major advertising platforms and award shows (Cannes Lions, The One Show, D&AD, etc.)
+- Recent social media campaigns or viral content
+- Industry-specific examples if applicable
 
-Find 3 specific, real campaign examples with their official names, source URLs, and detailed descriptions.`;
+Return the search results with campaign names and brief descriptions.`;
 
   try {
     logger.info('Fetching inspirations', { creativeType });
@@ -138,17 +138,17 @@ Find 3 specific, real campaign examples with their official names, source URLs, 
         return response.text;
       },
       {
-        timeoutMs: 60000, // 增加到 60 秒，Google Search 需要更长时间
-        maxRetries: 3,    // 增加重试次数
-        delayMs: 2000,    // 增加重试延迟
+        timeoutMs: 120000, // 增加到 120 秒，Google Search 需要更长时间
+        maxRetries: 3,     // 增加重试次数
+        delayMs: 3000,     // 增加重试延迟
         shouldRetry: isRetryableError,
       }
     );
 
     logger.info('Search results obtained', { resultLength: searchResults.length });
 
-    // Step 2: Parse search results and generate structured data with enhanced relevance scoring
-    const parsePrompt = `Based on these search results about advertising campaigns, extract and analyze 3 campaigns:
+    // Step 2: Parse search results and generate structured data with relaxed relevance scoring
+    const parsePrompt = `Based on these search results about advertising campaigns, extract and analyze 3-5 campaigns that are most relevant to the user's creative brief:
 
 ${searchResults}
 
@@ -157,7 +157,7 @@ For each campaign, provide a JSON object with these exact fields:
   "title": "Campaign/Product name",
   "highlight": "Key creative insight or unique selling point in Chinese",
   "category": "${creativeType}",
-  "relevanceScore": <number 0-100 indicating relevance to brief. MUST be >= 80 for high relevance matches>,
+  "relevanceScore": <number 0-100 indicating how much this campaign relates to the creative type and brief>,
   "detailedDescription": "Detailed explanation of the campaign strategy and execution in Chinese (2-3 sentences)",
   "keyInsights": "Core innovative points or breakthrough thinking that makes this case valuable in Chinese (2-3 sentences)",
   "targetAudience": "Target demographic description in Chinese",
@@ -165,10 +165,10 @@ For each campaign, provide a JSON object with these exact fields:
 }
 
 IMPORTANT:
-1. Only return campaigns where relevanceScore >= 75
-2. Be strict with relevance scoring - only score high if the case directly matches the creative type and brief requirements
-3. Provide insightful, actionable detailedDescription and keyInsights
-4. Return ONLY a JSON array with 3 objects maximum, no markdown, no explanations.`;
+1. Return 3-5 campaigns, sorted by relevance score (highest first)
+2. Be more inclusive with relevance scoring - a campaign is relevant if it shares similar themes, target audience, or creative approach (even if not 100% matching)
+3. For example, a slogan campaign targeting young professionals is relevant to a social media campaign targeting the same audience
+4. Return ONLY a JSON array with campaigns, no markdown, no explanations.`;
 
     const result = await withTimeoutAndRetry(
       async () => {
@@ -183,10 +183,11 @@ IMPORTANT:
         const jsonText = response.text.trim().replace(/^```json\s*|```\s*$/g, '');
         const parsedInspirations = JSON.parse(jsonText) as any[];
         
-        // Filter and ensure high-quality results with proper relevance scoring
+        // Filter by relevance but keep more results
         const validInspirations = parsedInspirations
-          .filter(insp => (insp.relevanceScore || 0) >= 75) // 只返回相关度 >= 75 的案例
-          .slice(0, 3)
+          .filter(insp => (insp.relevanceScore || 0) >= 50) // 降低阈值到 50，包含更多相关案例
+          .sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0)) // 按相关度排序
+          .slice(0, 3) // 取前 3 个
           .map((insp) => {
             const relevanceScore = Math.min(100, Math.max(0, insp.relevanceScore || 85));
             return {
@@ -203,7 +204,29 @@ IMPORTANT:
             } as InspirationCase;
           });
         
-        // 如果案例数不足，返回现有的（通常意味着网络搜索没有找到足够高相关度的案例）
+        // 如果案例数不足 3 个，继续使用所有找到的案例
+        if (validInspirations.length < 3 && parsedInspirations.length > 0) {
+          const additionalInspirations = parsedInspirations
+            .filter(insp => !validInspirations.some(v => v.title === insp.title))
+            .slice(0, 3 - validInspirations.length)
+            .map((insp) => {
+              const relevanceScore = Math.min(100, Math.max(0, insp.relevanceScore || 50));
+              return {
+                title: insp.title || '案例',
+                highlight: insp.highlight || '',
+                category: insp.category || creativeType,
+                relevanceScore: relevanceScore,
+                detailedDescription: insp.detailedDescription || '',
+                keyInsights: insp.keyInsights || insp.highlight || '',
+                targetAudience: insp.targetAudience || '通用',
+                industry: insp.industry || '广告',
+                imageUrl: `https://picsum.photos/seed/${encodeURIComponent(insp.title || '案例')}/600/400`,
+                sourceUrl: insp.sourceUrl,
+              } as InspirationCase;
+            });
+          validInspirations.push(...additionalInspirations);
+        }
+        
         return validInspirations.length > 0 ? validInspirations : 
           parsedInspirations.slice(0, 3).map((insp) => {
             return {
@@ -221,9 +244,9 @@ IMPORTANT:
           });
       },
       {
-        timeoutMs: 60000, // 增加到 60 秒
-        maxRetries: 3,    // 增加重试次数
-        delayMs: 2000,    // 增加重试延迟
+        timeoutMs: 120000, // 增加到 120 秒
+        maxRetries: 3,     // 增加重试次数
+        delayMs: 3000,     // 增加重试延迟
         shouldRetry: isRetryableError,
       }
     );
