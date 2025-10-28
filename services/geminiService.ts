@@ -138,9 +138,9 @@ Find 3 specific, real campaign examples with their official names, source URLs, 
         return response.text;
       },
       {
-        timeoutMs: 30000,
-        maxRetries: 2,
-        delayMs: 1000,
+        timeoutMs: 60000, // 增加到 60 秒，Google Search 需要更长时间
+        maxRetries: 3,    // 增加重试次数
+        delayMs: 2000,    // 增加重试延迟
         shouldRetry: isRetryableError,
       }
     );
@@ -221,9 +221,9 @@ IMPORTANT:
           });
       },
       {
-        timeoutMs: 30000,
-        maxRetries: 2,
-        delayMs: 1500,
+        timeoutMs: 60000, // 增加到 60 秒
+        maxRetries: 3,    // 增加重试次数
+        delayMs: 2000,    // 增加重试延迟
         shouldRetry: isRetryableError,
       }
     );
@@ -233,9 +233,25 @@ IMPORTANT:
 
   } catch (error) {
     logger.error("Error getting inspirations", error as Error);
+    // 返回错误提示案例，以便用户了解需要重试
+    const errorMessage = error instanceof Error ? error.message : '未知错误';
     return [
-      { title: "案例获取失败", highlight: "无法从网络获取灵感案例", imageUrl: "https://picsum.photos/seed/error1/600/400", relevanceScore: 0 },
-      { title: "请检查网络连接", highlight: "我们将继续为您生成创意方案", imageUrl: "https://picsum.photos/seed/error2/600/400", relevanceScore: 0 },
+      { 
+        title: "网络不易被探测", 
+        highlight: `案例推荐服务暂时不可用。\n错误: ${errorMessage}`, 
+        imageUrl: "https://picsum.photos/seed/error1/600/400", 
+        relevanceScore: 0,
+        detailedDescription: "案例推荐处于不可用状态，但我们仍然会为你生成一流的创意方案。",
+        keyInsights: "稍后尝试稍后尝试。"
+      },
+      { 
+        title: "想要查看案例配图", 
+        highlight: "需要检查你的网络连接", 
+        imageUrl: "https://picsum.photos/seed/error2/600/400", 
+        relevanceScore: 0,
+        detailedDescription: "请检查你的网络连接，然后稍后估估。",
+        keyInsights: "不过不覆你的创意稍后子。"
+      },
     ];
   }
 }
