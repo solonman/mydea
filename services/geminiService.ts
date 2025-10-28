@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import type { RefinementData, InspirationCase, CreativeProposal, GeneratingStatus, CreativeType, ExecutionDetails } from '../types';
+import type { RefinementData, InspirationCase, CreativeProposal, GeneratingStatus, CreativeType, ExecutionDetails, RefinementExpression } from '../types';
 import { handleError, validateBrief, logger, AppError, ErrorCodes } from '../utils/errors';
 import { withTimeoutAndRetry, isRetryableError } from '../utils/retry';
 
@@ -114,13 +114,19 @@ async function getInspirations(refinedBrief: string, creativeType: string): Prom
 Creative Type: ${creativeType}
 User Brief: ${refinedBrief}
 
-Find 5-10 specific, real campaign examples with their official names, source URLs, and brief descriptions. Include a variety of well-known brands, startups, and creative agencies. Focus on:
+Find 5-10 specific, real campaign examples with their official names, source URLs, and detailed descriptions. Include a variety of well-known brands, startups, and creative agencies. Focus on:
 - Campaigns that demonstrate similar creative approaches or themes
 - Cases from major advertising platforms and award shows (Cannes Lions, The One Show, D&AD, etc.)
 - Recent social media campaigns or viral content
 - Industry-specific examples if applicable
 
-Return the search results with campaign names and brief descriptions.`;
+For each campaign, include:
+- Official campaign name and year
+- Brand/agency name
+- Detailed description of the creative strategy (2-3 sentences)
+- Key insights and why it was successful
+
+Return the search results with comprehensive campaign information.`;
 
   try {
     logger.info('Fetching inspirations', { creativeType });
@@ -148,27 +154,31 @@ Return the search results with campaign names and brief descriptions.`;
     logger.info('Search results obtained', { resultLength: searchResults.length });
 
     // Step 2: Parse search results and generate structured data with relaxed relevance scoring
-    const parsePrompt = `Based on these search results about advertising campaigns, extract and analyze 3-5 campaigns that are most relevant to the user's creative brief:
+    const parsePrompt = `Based on these search results about advertising campaigns, extract and analyze ALL campaigns that are relevant to the user's creative brief:
 
 ${searchResults}
 
 For each campaign, provide a JSON object with these exact fields:
 {
   "title": "Campaign/Product name",
-  "highlight": "Key creative insight or unique selling point in Chinese",
+  "highlight": "Key creative insight or unique selling point in Chinese (1-2 sentences)",
   "category": "${creativeType}",
   "relevanceScore": <number 0-100 indicating how much this campaign relates to the creative type and brief>,
-  "detailedDescription": "Detailed explanation of the campaign strategy and execution in Chinese (2-3 sentences)",
-  "keyInsights": "Core innovative points or breakthrough thinking that makes this case valuable in Chinese (2-3 sentences)",
-  "targetAudience": "Target demographic description in Chinese",
-  "industry": "Industry category in Chinese"
+  "detailedDescription": "Comprehensive explanation of the campaign strategy, execution approach, and creative highlights in Chinese (3-5 sentences, very detailed)",
+  "keyInsights": "Core innovative points, breakthrough thinking, and why it was successful in Chinese (3-4 sentences, insightful)",
+  "targetAudience": "Specific target demographic description, psychographics, and behaviors in Chinese",
+  "industry": "Industry/sector category and market positioning in Chinese",
+  "sourceUrl": "Complete and valid URL starting with https:// or http:// pointing to the original campaign. Must be a real, working URL."
 }
 
 IMPORTANT:
-1. Return 3-5 campaigns, sorted by relevance score (highest first)
-2. Be more inclusive with relevance scoring - a campaign is relevant if it shares similar themes, target audience, or creative approach (even if not 100% matching)
-3. For example, a slogan campaign targeting young professionals is relevant to a social media campaign targeting the same audience
-4. Return ONLY a JSON array with campaigns, no markdown, no explanations.`;
+1. Return ALL campaigns where relevanceScore >= 50 (inclusive)
+2. Sort by relevance score (highest first)
+3. Focus on DETAILED and COMPREHENSIVE descriptions - each detailedDescription should be 3-5 sentences
+4. Make keyInsights substantive and insightful, not just repeating highlights
+5. Be specific about target audience demographics and psychographics
+6. **CRITICAL: sourceUrl must be a complete, valid URL with https:// or http:// protocol. DO NOT include relative paths, empty strings, or invalid URLs. If you cannot find a valid URL, use a reasonable URL based on the brand/campaign name.**
+7. Return ONLY a JSON array with campaigns, no markdown, no explanations.`;
 
     const result = await withTimeoutAndRetry(
       async () => {
@@ -183,13 +193,21 @@ IMPORTANT:
         const jsonText = response.text.trim().replace(/^```json\s*|```\s*$/g, '');
         const parsedInspirations = JSON.parse(jsonText) as any[];
         
-        // Filter by relevance but keep more results
-        const validInspirations = parsedInspirations
-          .filter(insp => (insp.relevanceScore || 0) >= 50) // 降低阈值到 50，包含更多相关案例
-          .sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0)) // 按相关度排序
-          .slice(0, 3) // 取前 3 个
+        // Filter and keep ALL relevant results (score >= 50), sorted by relevance
+        const allRelevantInspirations = parsedInspirations
+          .filter(insp => (insp.relevanceScore || 0) >= 50)
+          .sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0))
           .map((insp) => {
-            const relevanceScore = Math.min(100, Math.max(0, insp.relevanceScore || 85));
+            const relevanceScore = Math.min(100, Math.max(0, insp.relevanceScore || 50));
+            // 验证 sourceUrl 是否有效
+            let validSourceUrl = '';
+            if (insp.sourceUrl && typeof insp.sourceUrl === 'string' && insp.sourceUrl.trim()) {
+              const trimmedUrl = insp.sourceUrl.trim();
+              // 子往 http:// 或 https:// 开头，且不是相对路径、#或一些无效值
+              if (trimmedUrl.startsWith('http://') || trimmedUrl.startsWith('https://')) {
+                validSourceUrl = trimmedUrl;
+              }
+            }
             return {
               title: insp.title || '案例',
               highlight: insp.highlight || '',
@@ -200,48 +218,42 @@ IMPORTANT:
               targetAudience: insp.targetAudience || '通用',
               industry: insp.industry || '广告',
               imageUrl: `https://picsum.photos/seed/${encodeURIComponent(insp.title || '案例')}/600/400`,
-              sourceUrl: insp.sourceUrl,
+              sourceUrl: validSourceUrl, // 只有有效 URL 才会包含
             } as InspirationCase;
           });
         
-        // 如果案例数不足 3 个，继续使用所有找到的案例
-        if (validInspirations.length < 3 && parsedInspirations.length > 0) {
-          const additionalInspirations = parsedInspirations
-            .filter(insp => !validInspirations.some(v => v.title === insp.title))
-            .slice(0, 3 - validInspirations.length)
-            .map((insp) => {
-              const relevanceScore = Math.min(100, Math.max(0, insp.relevanceScore || 50));
-              return {
-                title: insp.title || '案例',
-                highlight: insp.highlight || '',
-                category: insp.category || creativeType,
-                relevanceScore: relevanceScore,
-                detailedDescription: insp.detailedDescription || '',
-                keyInsights: insp.keyInsights || insp.highlight || '',
-                targetAudience: insp.targetAudience || '通用',
-                industry: insp.industry || '广告',
-                imageUrl: `https://picsum.photos/seed/${encodeURIComponent(insp.title || '案例')}/600/400`,
-                sourceUrl: insp.sourceUrl,
-              } as InspirationCase;
-            });
-          validInspirations.push(...additionalInspirations);
-        }
-        
-        return validInspirations.length > 0 ? validInspirations : 
-          parsedInspirations.slice(0, 3).map((insp) => {
-            return {
-              title: insp.title || '案例',
-              highlight: insp.highlight || '',
-              category: insp.category || creativeType,
-              relevanceScore: Math.min(100, Math.max(0, insp.relevanceScore || 75)),
-              detailedDescription: insp.detailedDescription || '',
-              keyInsights: insp.keyInsights || insp.highlight || '',
-              targetAudience: insp.targetAudience || '通用',
-              industry: insp.industry || '广告',
-              imageUrl: `https://picsum.photos/seed/${encodeURIComponent(insp.title || '案例')}/600/400`,
-              sourceUrl: insp.sourceUrl,
-            } as InspirationCase;
-          });
+        // 返回所有符合条件的案例（至少 3 个），用于在前端支持分页展示
+        return allRelevantInspirations.length >= 3 ? allRelevantInspirations : 
+          // 如果不足 3 个，补充较低评分的案例
+          allRelevantInspirations.concat(
+            parsedInspirations
+              .filter(insp => (insp.relevanceScore || 0) < 50 && (insp.relevanceScore || 0) >= 30)
+              .sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0))
+              .slice(0, 3 - allRelevantInspirations.length)
+              .map((insp) => {
+                const relevanceScore = Math.min(100, Math.max(0, insp.relevanceScore || 30));
+                // 验证 sourceUrl 是否有效
+                let validSourceUrl = '';
+                if (insp.sourceUrl && typeof insp.sourceUrl === 'string' && insp.sourceUrl.trim()) {
+                  const trimmedUrl = insp.sourceUrl.trim();
+                  if (trimmedUrl.startsWith('http://') || trimmedUrl.startsWith('https://')) {
+                    validSourceUrl = trimmedUrl;
+                  }
+                }
+                return {
+                  title: insp.title || '案例',
+                  highlight: insp.highlight || '',
+                  category: insp.category || creativeType,
+                  relevanceScore: relevanceScore,
+                  detailedDescription: insp.detailedDescription || '',
+                  keyInsights: insp.keyInsights || insp.highlight || '',
+                  targetAudience: insp.targetAudience || '通用',
+                  industry: insp.industry || '广告',
+                  imageUrl: `https://picsum.photos/seed/${encodeURIComponent(insp.title || '案例')}/600/400`,
+                  sourceUrl: validSourceUrl,
+                } as InspirationCase;
+              })
+          );
       },
       {
         timeoutMs: 120000, // 增加到 120 秒
@@ -373,6 +385,8 @@ export async function optimizeProposal(
 
   const prompt = `You are an expert advertising creative director tasked with refining a creative proposal based on user feedback.
 
+  **IMPORTANT: Keep the conceptTitle EXACTLY THE SAME as the original. Only optimize the creative content (coreIdea, detailedDescription, example, whyItWorks), not the direction.**
+
   **Original Creative Brief:**
   ${contextBrief}
 
@@ -388,7 +402,7 @@ export async function optimizeProposal(
   **User's Feedback for Optimization:**
   "${feedback}"
 
-  Based on the feedback, please generate a new, improved version of the creative proposal. Your response must be a single JSON object that strictly follows the same structure as the original proposal.
+  Based on the feedback, please generate an improved version. **CRITICAL: Return the conceptTitle unchanged.** Only refine the coreIdea, detailedDescription, example, and whyItWorks. Your response must be a single JSON object that strictly follows the same structure as the original proposal.
   `;
   
   try {
@@ -505,6 +519,154 @@ export async function generateExecutionPlan(
 
   } catch(error) {
     logger.error("Error generating execution plan", error as Error);
+    throw handleError(error);
+  }
+}
+
+export async function refineCreativeExpression(
+  proposal: CreativeProposal,
+  creativeType: CreativeType,
+  contextBrief: string
+): Promise<RefinementExpression> {
+  const model = 'gemini-2.5-pro';
+
+  let refinementGuidance = '';
+  switch (creativeType) {
+    case 'Slogan':
+      refinementGuidance = `
+创意表达要求：
+- 精炼标题：简洁有力的创意标题（5-10 字）
+- 核心创意：高度概括的创意主张（一句话）
+- 具体表达：最终可用的 Slogan（1-3 句，包含核心信息）
+- 可选表达方式：提供 3-5 个不同角度或风格的 Slogan 变体
+- 意义阐述：解释这个 Slogan 为什么有效、传达了什么
+- 应用举例：给出 3-5 个具体的应用场景示例（如海报、广告语、品牌口号等）
+- 语调指导：说明表达的风格（正式/亲民/创意感等）`;
+      break;
+    case '社交媒体文案':
+      refinementGuidance = `
+创意表达要求：
+- 精炼标题：文案主题标题
+- 核心创意：文案的核心卖点
+- 具体表达：最终可用的完整文案
+- 可选表达方式：提供 3-5 个不同平台或风格的文案版本（微博、微信、抖音等）
+- 意义阐述：解释文案策略和效果预期
+- 应用举例：配图/视频建议、发布时间、互动策略等
+- 语调指导：平台特有的表达风格建议`;
+      break;
+    case '平面设计':
+      refinementGuidance = `
+创意表达要求：
+- 精炼标题：设计概念名称
+- 核心创意：设计的创意概念
+- 具体表达：构图方案详细描述（要素、布局、配色、排版等）
+- 可选表达方式：提供 3-5 个不同风格或尺寸的设计方案描述
+- 意义阐述：设计策略和视觉效果如何支撑创意概念
+- 应用举例：具体的设计成品示例说明（如海报、包装、UI等）
+- 视觉指导：字体、色系、图像风格的具体建议`;
+      break;
+    case '视频创意':
+      refinementGuidance = `
+创意表达要求：
+- 精炼标题：视频主题/概念名称
+- 核心创意：视频的核心创意思路
+- 具体表达：最终可用的视频脚本（场景、台词、镜头、音效等）
+- 可选表达方式：提供 3-5 个不同长度或风格的脚本版本（15s/30s/60s 等）
+- 意义阐述：视频策略、目标平台、传播效果预期
+- 应用举例：演员/画面参考、音乐建议、字幕文案等
+- 语调指导：节奏、情感基调、品牌语言的具体表现`;
+      break;
+    case '公关活动':
+      refinementGuidance = `
+创意表达要求：
+- 精炼标题：活动名称/主题
+- 核心创意：活动的核心想法
+- 具体表达：完整的活动执行方案（时间、地点、参与者、流程、要素等）
+- 可选表达方式：提供 3-5 个不同规模或形式的活动方案变体
+- 意义阐述：活动如何实现传播目标、期望的舆论和市场反应
+- 应用举例：邀请函文案、现场布置、媒体沟通、后续运营等
+- 语调指导：活动的基调（庆祝/宣传/互动/教育等）`;
+      break;
+    case '品牌命名':
+      refinementGuidance = `
+创意表达要求：
+- 精炼标题：命名的创意核心
+- 核心创意：名字背后的创意逻辑
+- 具体表达：最终的品牌名称及其含义解释
+- 可选表达方式：提供 3-5 个候选名字及各自的含义
+- 意义阐述：名字的寓意、记忆点、品牌关联性
+- 应用举例：如何在品牌故事、标语、视觉中体现这个名字的含义
+- 语调指导：名字传达的品牌性格（高端/亲民/创新/可靠等）`;
+      break;
+    default:
+      refinementGuidance = '基于创意类型提供具体的表达方案';
+  }
+
+  const prompt = `You are a world-class creative director and copywriter. Your task is to refine and finalize a creative concept into concrete, actionable creative expressions in Chinese.
+
+**Original Creative Brief:**
+${contextBrief}
+
+**Creative Proposal to Refine:**
+${JSON.stringify({
+  conceptTitle: proposal.conceptTitle,
+  coreIdea: proposal.coreIdea,
+  detailedDescription: proposal.detailedDescription,
+  example: proposal.example,
+  whyItWorks: proposal.whyItWorks,
+}, null, 2)}
+
+**Refinement Guidance for ${creativeType}:**
+${refinementGuidance}
+
+**Your Task:**
+Based on the proposal and guidance above, generate a comprehensive and concrete creative expression. Return a JSON object with the following structure:
+{
+  "title": "Refined creative concept title (in Chinese)",
+  "refinedCoreIdea": "One-sentence refined core idea (in Chinese)",
+  "refinedExample": "Detailed final expression/execution example (in Chinese, 2-3 paragraphs)",
+  "alternatives": ["Alternative 1 expression (in Chinese)", "Alternative 2 (in Chinese)", ...],
+  "reasoning": "Explanation of why this refined expression is effective (in Chinese, 2-3 sentences)",
+  "visualGuidance": "Visual style guidance if applicable (in Chinese)",
+  "toneGuidance": "Tone and style guidance (in Chinese)"
+}
+
+IMPORTANT:
+1. The refinedExample should be very detailed and practical - something that can be directly used
+2. Provide 3-5 thoughtful alternatives that explore different angles or styles
+3. Be concrete and specific, not abstract
+4. All text must be in Chinese
+5. Return ONLY valid JSON, no markdown or explanations`;
+
+  try {
+    logger.info('Refining creative expression', { proposalId: proposal.id, creativeType });
+
+    const result = await withTimeoutAndRetry(
+      async () => {
+        const response = await ai.models.generateContent({
+          model: model,
+          contents: prompt,
+          config: {
+            responseMimeType: "application/json",
+          },
+        });
+
+        const jsonText = response.text.trim().replace(/^```json\s*|```\s*$/g, '');
+        return JSON.parse(jsonText) as RefinementExpression;
+      },
+      {
+        timeoutMs: 60000,
+        maxRetries: 3,
+        delayMs: 3000,
+        shouldRetry: isRetryableError,
+      }
+    );
+
+    logger.info('Creative expression refined successfully');
+    return result;
+
+  } catch (error) {
+    logger.error("Error refining creative expression", error as Error);
     throw handleError(error);
   }
 }

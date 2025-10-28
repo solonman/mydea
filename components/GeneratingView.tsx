@@ -119,7 +119,7 @@ const GeneratingView: React.FC<GeneratingViewProps> = ({ status }) => {
             margin: 0,
             lineHeight: '1.6'
           }}>
-            💡 {t('tip')}: {t('aiGeneratingProposals')}
+            💡 {t('aiGeneratingProposals')}
           </p>
         </div>
       </div>

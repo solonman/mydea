@@ -326,6 +326,7 @@ import { refineBrief, generateCreativePackage, optimizeProposal, generateExecuti
             ...p, 
             id: crypto.randomUUID(),
             version: 1,
+            history: [],
             isFinalized: false,
             executionDetails: null
         }));
@@ -352,7 +353,8 @@ import { refineBrief, generateCreativePackage, optimizeProposal, generateExecuti
       setError(null);
       try {
         const optimizedData = await optimizeProposal(proposal, feedback, currentRun.refinedBriefText);
-        const oldVersion = { ...proposal, history: undefined, isFinalized: false, executionDetails: null };
+        // 保存旧版本，整个 history 应该一并保留
+        const oldVersion = { ...proposal, history: proposal.history || [], isFinalized: false, executionDetails: null, refinement: undefined };
         const newProposal: CreativeProposal = {
           ...optimizedData,
           id: proposal.id, // Keep same ID
@@ -412,7 +414,7 @@ import { refineBrief, generateCreativePackage, optimizeProposal, generateExecuti
       if (!currentRun?.proposals) return;
 
       const newVersionNumber = currentProposal.version + 1;
-      const allHistory = [ ...(currentProposal.history || []), { ...currentProposal, history: undefined, isFinalized: false, executionDetails: null } ];
+      const allHistory = [ ...(currentProposal.history || []), { ...currentProposal, history: currentProposal.history, isFinalized: false, executionDetails: null } ];
 
       const proposalToExecute: CreativeProposal = {
         ...versionToPromote,
@@ -431,6 +433,33 @@ import { refineBrief, generateCreativePackage, optimizeProposal, generateExecuti
           }
       } catch (e: any) {
           setError(e.message || '从历史版本生成执行方案时发生未知错误。');
+      }
+    };
+
+    const handleSaveRefinement = async (proposal: CreativeProposal, refinement: any) => {
+      if (!currentRun?.proposals) return;
+
+      try {
+        setIsLoading(true);
+        
+        // 保存细化内容为新版本，整个 history 应该一并保留
+        const oldVersion = { ...proposal, history: proposal.history, isFinalized: false, executionDetails: null, refinement: undefined };
+        const newProposal: CreativeProposal = {
+          ...proposal,
+          version: proposal.version + 1,
+          refinement: { ...refinement, isUserModified: true },
+          history: [ ...(proposal.history || []), oldVersion ],
+          isFinalized: false,
+          executionDetails: null,
+        };
+
+        const updatedProposals = currentRun.proposals.map(p => p.id === proposal.id ? newProposal : p);
+        setCurrentRun(prev => ({...prev, proposals: updatedProposals}));
+      } catch(e) {
+        console.error(e);
+        setError('保存细化内容时出错，请重试。');
+      } finally {
+        setIsLoading(false);
       }
     };
     
@@ -616,6 +645,9 @@ import { refineBrief, generateCreativePackage, optimizeProposal, generateExecuti
                 onOptimize={handleOptimizeProposal}
                 onExecute={handleFinalizeAndExecute}
                 onPromoteAndExecute={handlePromoteAndExecuteVersion}
+                onRefinementSave={handleSaveRefinement}
+                creativeType={currentRun.initialBrief?.type}
+                contextBrief={currentRun.refinedBriefText}
                 isProcessing={isLoading}
               />
           ) : <GeneratingView status="finished" />;

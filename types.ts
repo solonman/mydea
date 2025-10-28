@@ -41,6 +41,18 @@ export interface ExecutionDetails {
     content: string;
 }
 
+export interface RefinementExpression {
+  title: string;                    // 精炼后的概念标题
+  refinedCoreIdea: string;          // 精炼后的核心创意
+  refinedExample: string;           // 精炼后的最终表达示例（可用内容）
+  alternatives: string[];           // 3-5 个可选表达方式
+  reasoning: string;                // 为什么这样表达更好
+  visualGuidance?: string;          // 视觉指导（针对平面设计）
+  toneGuidance?: string;            // 表达语调指导
+  createdAt?: Date;                 // 创建时间
+  isUserModified?: boolean;         // 是否为用户修改版本
+}
+
 export interface CreativeProposal {
   id: string; 
   conceptTitle: string;
@@ -49,9 +61,10 @@ export interface CreativeProposal {
   example: string;
   whyItWorks: string;
   version: number;
-  history?: Omit<CreativeProposal, 'history' | 'isFinalized' | 'executionDetails'>[];
+  history?: Omit<CreativeProposal, 'history' | 'isFinalized' | 'executionDetails' | 'refinement'>[];
   isFinalized: boolean;
   executionDetails: ExecutionDetails | null;
+  refinement?: RefinementExpression;  // 细化表达
 }
 
 export type GeneratingStatus = "analyzing" | "inspiring" | "creating" | "finished";

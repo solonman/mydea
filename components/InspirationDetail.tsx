@@ -254,7 +254,7 @@ const InspirationDetail: React.FC<InspirationDetailProps> = ({ case: caseData, o
             )}
 
             {/* 来源链接 */}
-            {caseData.sourceUrl && (
+            {caseData.sourceUrl && caseData.sourceUrl.trim() !== '' && caseData.sourceUrl.startsWith('http') && (
               <div style={{
                 marginTop: '32px',
                 paddingTop: '24px',

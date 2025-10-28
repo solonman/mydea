@@ -72,12 +72,12 @@ const Header: React.FC<HeaderProps> = ({ onNavigateToDashboard, onLogout, onBack
               
               {/* 用户菜单 */}
               <div className="relative" ref={menuRef}>
-                <button onClick={() => setMenuOpen(!menuOpen)} className="flex items-center gap-2 px-3 py-2 bg-gray-800 rounded-full border border-gray-600 hover:bg-gray-700">
+                <button onClick={() => setMenuOpen(!menuOpen)} className="flex items-center gap-2 px-3 py-1 bg-gray-800 rounded-full border border-gray-600 hover:bg-gray-700">
                   {user.avatar ? (
                     <img 
                       src={user.avatar} 
                       alt={t('avatar')} 
-                      className="w-6 h-6 rounded-full object-cover"
+                      className="w-10 h-10 rounded-full object-cover"
                     />
                   ) : (
                     <div className="w-6 h-6 rounded-full bg-gray-600 flex items-center justify-center">
