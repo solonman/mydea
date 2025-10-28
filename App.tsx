@@ -33,6 +33,7 @@ import { refineBrief, generateCreativePackage, optimizeProposal, generateExecuti
     const [language, setLanguage] = useState<Language>('zh');
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [supabaseUser, setSupabaseUser] = useState<SupabaseUser | null>(null);
+    const [isAppInitialized, setIsAppInitialized] = useState(false); // 应用初始化标记
     
     const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
     const [activeBriefId, setActiveBriefId] = useState<string | null>(null);
@@ -49,8 +50,13 @@ import { refineBrief, generateCreativePackage, optimizeProposal, generateExecuti
     const [showTermsOfService, setShowTermsOfService] = useState(false);
     const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
     
-    // Session check on initial render
+    // Session check on initial render - 仅执行一次
     useEffect(() => {
+      // 防止应用在标签页失焦后重复初始化
+      if (isAppInitialized) {
+        return;
+      }
+      
       // 检查是否有 Supabase 认证会话
       const checkAuth = async () => {
         try {
@@ -74,6 +80,9 @@ import { refineBrief, generateCreativePackage, optimizeProposal, generateExecuti
           }
         } catch (error) {
           logger.error('Auth check failed', error as Error);
+        } finally {
+          // 标记初始化已完成，防止重复执行
+          setIsAppInitialized(true);
         }
       };
 
@@ -93,7 +102,7 @@ import { refineBrief, generateCreativePackage, optimizeProposal, generateExecuti
       });
 
       return () => unsubscribe();
-    }, []);
+    }, [isAppInitialized]);
 
     // Load user from Supabase when user logs in
     useEffect(() => {

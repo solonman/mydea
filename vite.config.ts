@@ -8,6 +8,15 @@ export default defineConfig(({ mode }) => {
       server: {
         port: 3000,
         host: '0.0.0.0',
+        // 优化 HMR 配置，防止失焦时自动刷新
+        hmr: {
+          protocol: 'ws',
+          host: 'localhost',
+          port: 5173,
+          timeout: 60000, // 增加超时时间
+        },
+        // 防止自动全页刷新
+        middlewareMode: false,
       },
       plugins: [react()],
       define: {
