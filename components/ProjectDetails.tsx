@@ -344,7 +344,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, supabaseUser, 
                                 transition: 'all 0.2s'
                             }}
                         >
-                            ☑️ 启用多选
+                            ⚙️ 任务管理
                         </button>
                     )}
                 </div>
@@ -467,31 +467,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, supabaseUser, 
                                     </div>
                                 </div>
                                 
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleDelete(brief.id);
-                                    }}
-                                    style={{
-                                        padding: '6px 10px',
-                                        fontSize: '14px',
-                                        background: 'transparent',
-                                        border: 'none',
-                                        color: '#9CA3AF',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.2s',
-                                        flexShrink: 0,
-                                        lineHeight: '1'
-                                    }}
-                                    onMouseEnter={(e) => {
-                                        e.currentTarget.style.color = '#FCA5A5';
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        e.currentTarget.style.color = '#9CA3AF';
-                                    }}
-                                >
-                                    🗑️
-                                </button>
+                                {/* ... existing code ... */}
                             </div>
                                 ))}
                             </div>
