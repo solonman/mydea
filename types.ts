@@ -51,6 +51,7 @@ export interface RefinementExpression {
   toneGuidance?: string;            // 表达语调指导
   createdAt?: Date;                 // 创建时间
   isUserModified?: boolean;         // 是否为用户修改版本
+  versionLabel?: string;            // 版本标签（如 v2-2025.10.30-15:45）
 }
 
 export interface CreativeProposal {
@@ -61,10 +62,11 @@ export interface CreativeProposal {
   example: string;
   whyItWorks: string;
   version: number;
-  history?: Omit<CreativeProposal, 'history' | 'isFinalized' | 'executionDetails' | 'refinement'>[];
+  history?: Omit<CreativeProposal, 'history' | 'isFinalized' | 'executionDetails' | 'refinement' | 'refinementV1'>[];
   isFinalized: boolean;
   executionDetails: ExecutionDetails | null;
-  refinement?: RefinementExpression;  // 细化表达
+  refinement?: RefinementExpression;  // 细化表达（当前版本，可能是v1或v2）
+  refinementV1?: RefinementExpression;  // 原始AI生成的v1版本（用于版本切换）
 }
 
 export type GeneratingStatus = "analyzing" | "inspiring" | "creating" | "finished";

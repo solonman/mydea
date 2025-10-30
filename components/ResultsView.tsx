@@ -3,8 +3,9 @@ import type { InspirationCase, CreativeProposal, RefinementExpression } from '..
 import { useLanguage } from '../i18n/useLanguage';
 import LoadingSpinner from './LoadingSpinner';
 import InspirationDetail from './InspirationDetail';
-import RefinementEditorModal from './RefinementEditorModal';
+import RichTextEditor from './RichTextEditor';
 import { refineCreativeExpression } from '../services/geminiService';
+import { downloadAsMarkdown, downloadAsDocx } from '../services/downloadService';
 
 // A simple markdown renderer
 const SimpleMarkdown: React.FC<{ text: string }> = ({ text }) => {
@@ -21,9 +22,19 @@ const HistoricalVersionModal: React.FC<{
     isProcessing: boolean
 }> = ({ proposal, onClose, onPromoteAndExecute, isProcessing }) => {
     const [isExecuting, setIsExecuting] = useState(false);
+    
+    // 确保所有字符串字段都是字符串
+    const safeProposal = {
+      ...proposal,
+      conceptTitle: typeof proposal.conceptTitle === 'string' ? proposal.conceptTitle : JSON.stringify(proposal.conceptTitle),
+      coreIdea: typeof proposal.coreIdea === 'string' ? proposal.coreIdea : JSON.stringify(proposal.coreIdea),
+      detailedDescription: typeof proposal.detailedDescription === 'string' ? proposal.detailedDescription : JSON.stringify(proposal.detailedDescription),
+      example: typeof proposal.example === 'string' ? proposal.example : JSON.stringify(proposal.example),
+      whyItWorks: typeof proposal.whyItWorks === 'string' ? proposal.whyItWorks : JSON.stringify(proposal.whyItWorks),
+    };
 
     const handlePromote = async () => {
-        if(window.confirm(`您确定要选择 V${proposal.version} 作为最终版本并生成执行方案吗？这将会创建一个新的版本。`)) {
+        if(window.confirm(`您确定要选择 V${safeProposal.version} 作为最终版本并生成执行方案吗？这将会创建一个新的版本。`)) {
             setIsExecuting(true);
             await onPromoteAndExecute(proposal);
             setIsExecuting(false);
@@ -41,9 +52,9 @@ const HistoricalVersionModal: React.FC<{
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
                     <div>
                         <h3 className="heading-gradient" style={{ fontSize: '24px', marginBottom: '8px' }}>
-                            {proposal.conceptTitle}
+                            {safeProposal.conceptTitle}
                         </h3>
-                        <span className="badge-info" style={{ fontSize: '13px' }}>版本 {proposal.version}</span>
+                        <span className="badge-info" style={{ fontSize: '13px' }}>版本 {safeProposal.version}</span>
                     </div>
                     <button 
                         onClick={onClose} 
@@ -90,7 +101,7 @@ const HistoricalVersionModal: React.FC<{
                             💡 核心创意
                         </h4>
                         <p style={{ fontSize: '14px', color: 'var(--text-primary)', lineHeight: '1.6' }}>
-                            {proposal.coreIdea}
+                            {safeProposal.coreIdea}
                         </p>
                     </div>
                     
@@ -99,7 +110,7 @@ const HistoricalVersionModal: React.FC<{
                             📝 创意详述
                         </h4>
                         <p style={{ fontSize: '14px', color: 'var(--text-primary)', lineHeight: '1.6' }}>
-                            {proposal.detailedDescription}
+                            {safeProposal.detailedDescription}
                         </p>
                     </div>
                     
@@ -108,7 +119,7 @@ const HistoricalVersionModal: React.FC<{
                             💬 应用示例
                         </h4>
                         <p style={{ fontSize: '14px', color: 'var(--text-secondary)', fontStyle: 'italic', lineHeight: '1.6' }}>
-                            "{proposal.example}"
+                            "{safeProposal.example}"
                         </p>
                     </div>
                     
@@ -117,7 +128,7 @@ const HistoricalVersionModal: React.FC<{
                             ✨ 为什么会奏效
                         </h4>
                         <p style={{ fontSize: '14px', color: 'var(--text-primary)', lineHeight: '1.6' }}>
-                            {proposal.whyItWorks}
+                            {safeProposal.whyItWorks}
                         </p>
                     </div>
                 </div>
@@ -135,7 +146,7 @@ const HistoricalVersionModal: React.FC<{
                                 <span>正在处理...</span>
                             </span>
                         ) : (
-                            `选用 V${proposal.version} 并执行`
+                            `选用 V${safeProposal.version} 并执行`
                         )}
                     </button>
                 </div>
@@ -157,15 +168,24 @@ const ProposalCard: React.FC<{
   t: (key: any, options?: any) => string;
   openVersionMenuId?: string | null;
   setOpenVersionMenuId?: (id: string | null) => void;
-}> = ({ proposal, index, onOptimize, onExecute, onPromoteAndExecute, onRefinementSave, creativeType = '创意', contextBrief = '', isProcessing, t, openVersionMenuId, setOpenVersionMenuId }) => {
+  anyFeedbackFormOpen: boolean;
+  setAnyFeedbackFormOpen: (open: boolean) => void;
+  anyTaskRunning: boolean;
+  setAnyTaskRunning: (running: boolean) => void;
+  onOpenEditor?: (proposal: CreativeProposal, refinement: RefinementExpression) => void;
+}> = ({ proposal, index, onOptimize, onExecute, onPromoteAndExecute, onRefinementSave, creativeType = '创意', contextBrief = '', isProcessing, t, openVersionMenuId, setOpenVersionMenuId, anyFeedbackFormOpen, setAnyFeedbackFormOpen, anyTaskRunning, setAnyTaskRunning, onOpenEditor }) => {
   const [showOptimizer, setShowOptimizer] = useState(false);
   const [feedback, setFeedback] = useState('');
   const [isExecuting, setIsExecuting] = useState(false);
   const [isRefining, setIsRefining] = useState(false);
   const [viewingHistory, setViewingHistory] = useState<Omit<CreativeProposal, 'history' | 'isFinalized' | 'executionDetails'> | null>(null);
   const [isRefinementExpanded, setIsRefinementExpanded] = useState(true);
+  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
   // 只记录选中的版本号，不记录整个对象
   const [selectedVersionNumber, setSelectedVersionNumber] = useState(proposal.version);
+  const [showRefinementVersionMenu, setShowRefinementVersionMenu] = useState(false);
+  // 细化版本数据显示：v1 或 v2
+  const [displayRefinementVersion, setDisplayRefinementVersion] = useState<'v1' | 'v2'>('v1');
   
   // 根据版本号获取实际的版本对象
   const getCurrentDisplayVersion = (): CreativeProposal => {
@@ -188,10 +208,41 @@ const ProposalCard: React.FC<{
   
   const displayVersion = getCurrentDisplayVersion();
   
-  const handleOptimizeClick = () => setShowOptimizer(true);
+  // 确保所有字符串字段都是字符串，而不是对象
+  const safeDisplayVersion = {
+    ...displayVersion,
+    conceptTitle: typeof displayVersion.conceptTitle === 'string' ? displayVersion.conceptTitle : JSON.stringify(displayVersion.conceptTitle),
+    coreIdea: typeof displayVersion.coreIdea === 'string' ? displayVersion.coreIdea : JSON.stringify(displayVersion.coreIdea),
+    detailedDescription: typeof displayVersion.detailedDescription === 'string' ? displayVersion.detailedDescription : JSON.stringify(displayVersion.detailedDescription),
+    example: typeof displayVersion.example === 'string' ? displayVersion.example : JSON.stringify(displayVersion.example),
+    whyItWorks: typeof displayVersion.whyItWorks === 'string' ? displayVersion.whyItWorks : JSON.stringify(displayVersion.whyItWorks),
+  };
+  
+  // 根据 refinement 中的 versionLabel 判断是否有用户修改的 v2 版本
+  const hasV2Version = displayVersion.refinement?.versionLabel?.startsWith('v2');
+  
+  // 根据displayRefinementVersion选择显示的细化内容（v1原始版本或v2修改版本）
+  const getDisplayRefinement = () => {
+    if (displayRefinementVersion === 'v2' && hasV2Version) {
+      // 显示 v2 修改版本
+      return displayVersion.refinement;
+    }
+    // 显示 v1 原始版本
+    return displayVersion.refinementV1 || displayVersion.refinement;
+  };
+  
+  const currentDisplayRefinement = getDisplayRefinement();
+  
+  const handleOptimizeClick = () => {
+    setShowOptimizer(true);
+    setAnyFeedbackFormOpen(true);
+    setAnyTaskRunning(true);
+  };
   const handleCancel = () => {
     setShowOptimizer(false);
     setFeedback('');
+    setAnyFeedbackFormOpen(false);
+    setAnyTaskRunning(false);
   };
   
   const handleSubmitFeedback = async (e: React.FormEvent) => {
@@ -200,13 +251,17 @@ const ProposalCard: React.FC<{
     await onOptimize(proposal, feedback);
     setShowOptimizer(false);
     setFeedback('');
+    setAnyFeedbackFormOpen(false);
+    setAnyTaskRunning(false);
   };
   
   const handleExecute = async () => {
       if(window.confirm("确定要将此方案定稿并生成执行细则吗？定稿后将无法再进行优化。")) {
           setIsExecuting(true);
+          setAnyTaskRunning(true);
           await onExecute(proposal);
           setIsExecuting(false);
+          setAnyTaskRunning(false);
       }
   }
 
@@ -214,6 +269,7 @@ const ProposalCard: React.FC<{
     if (!proposal.refinement) {
       // 生成细化内容
       setIsRefining(true);
+      setAnyTaskRunning(true);
       try {
         const refinement = await refineCreativeExpression(
           proposal,
@@ -230,6 +286,7 @@ const ProposalCard: React.FC<{
         alert('生成细化内容失败，请重试');
       } finally {
         setIsRefining(false);
+        setAnyTaskRunning(false);
       }
     } else {
       // 已有细化内容，直接展开/折叠
@@ -241,7 +298,10 @@ const ProposalCard: React.FC<{
     if (onRefinementSave) {
       setIsRefining(true);
       try {
+        // 保存用户修改的版本（versionLabel 已在编辑器中设置）
         await onRefinementSave(proposal, refinement);
+        // 编辑完成后自动切换到 v2 显示
+        setDisplayRefinementVersion('v2');
         setIsRefinementExpanded(true);
       } catch (error) {
         console.error('Error saving refinement:', error);
@@ -252,8 +312,27 @@ const ProposalCard: React.FC<{
     }
   }
 
+  const handleEditClick = () => {
+    if (displayVersion.refinement && onOpenEditor) {
+      onOpenEditor(proposal, displayVersion.refinement);
+    }
+  };
+
   const charCount = feedback.length;
   const maxChars = 300;
+  
+  // 下载处理
+  const handleDownload = (format: string) => {
+    switch(format) {
+      case 'markdown':
+        downloadAsMarkdown(proposal);
+        break;
+      case 'docx':
+        downloadAsDocx(proposal);
+        break;
+    }
+    setShowDownloadMenu(false);
+  };
 
   return (
     <>
@@ -408,7 +487,7 @@ const ProposalCard: React.FC<{
             💡 核心创意
           </h4>
           <p style={{ fontSize: '14px', color: 'var(--text-primary)', lineHeight: '1.7' }}>
-            {displayVersion.coreIdea}
+            {safeDisplayVersion.coreIdea}
           </p>
         </div>
         
@@ -417,7 +496,7 @@ const ProposalCard: React.FC<{
             📝 创意详述
           </h4>
           <p style={{ fontSize: '14px', color: 'var(--text-primary)', lineHeight: '1.7' }}>
-            {displayVersion.detailedDescription}
+            {safeDisplayVersion.detailedDescription}
           </p>
         </div>
         
@@ -426,7 +505,7 @@ const ProposalCard: React.FC<{
             💬 应用示例
           </h4>
           <p style={{ fontSize: '14px', color: 'var(--text-secondary)', fontStyle: 'italic', lineHeight: '1.7' }}>
-            "{displayVersion.example}"
+            "{safeDisplayVersion.example}"
           </p>
         </div>
         
@@ -435,7 +514,7 @@ const ProposalCard: React.FC<{
             ✨ 为什么会奏效
           </h4>
           <p style={{ fontSize: '14px', color: 'var(--text-primary)', lineHeight: '1.7' }}>
-            {displayVersion.whyItWorks}
+            {safeDisplayVersion.whyItWorks}
           </p>
         </div>
       </div>
@@ -484,106 +563,313 @@ const ProposalCard: React.FC<{
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', animation: 'fadeIn 0.3s ease' }}>
               {/* 细化展示区 - 背景区块 */}
               <div style={{ padding: '20px', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(59, 130, 246, 0.15)', borderRadius: '8px' }}>
-                {/* 展示区右上角显示小写版本号 v1 */}
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
+                {/* 展示区右上角显示小写版本号 v1 或 v2 */}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px', position: 'relative' }}>
                   <button
-                    onClick={() => alert('细化版本切换功能开发中')}
+                    onClick={() => setShowRefinementVersionMenu(!showRefinementVersionMenu)}
                     style={{
                       padding: '4px 12px',
                       fontSize: '12px',
                       fontWeight: '600',
                       color: 'var(--brand-blue)',
-                      background: 'rgba(59, 130, 246, 0.1)',
+                      background: 'rgba(59, 130, 246, 0.15)',
                       border: '1px solid rgba(59, 130, 246, 0.3)',
                       borderRadius: '4px',
                       cursor: 'pointer',
-                      transition: 'all 0.2s'
+                      transition: 'all 0.2s',
+                      position: 'relative',
+                      zIndex: 10
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.background = 'rgba(59, 130, 246, 0.2)';
+                      e.currentTarget.style.background = 'rgba(59, 130, 246, 0.25)';
                       e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.5)';
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)';
+                      e.currentTarget.style.background = 'rgba(59, 130, 246, 0.15)';
                       e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.3)';
                     }}
                   >
-                    v1
+                    {displayRefinementVersion === 'v2' && hasV2Version ? displayVersion.refinement?.versionLabel : 'v1'}
                   </button>
+                  
+                  {/* 版本切换菜单 */}
+                  {showRefinementVersionMenu && (
+                    <>
+                      <div
+                        onClick={() => setShowRefinementVersionMenu(false)}
+                        style={{
+                          position: 'fixed',
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          zIndex: 1998,
+                          background: 'transparent'
+                        }}
+                      />
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: '100%',
+                          right: 0,
+                          marginTop: '8px',
+                          background: 'var(--bg-primary)',
+                          border: '1px solid var(--border-default)',
+                          borderRadius: '8px',
+                          padding: '8px',
+                          minWidth: '160px',
+                          boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+                          zIndex: 1999
+                        }}
+                      >
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDisplayRefinementVersion('v1');
+                            setShowRefinementVersionMenu(false);
+                          }}
+                          style={{
+                            display: 'block',
+                            width: '100%',
+                            textAlign: 'left',
+                            padding: '10px 12px',
+                            fontSize: '13px',
+                            color: displayRefinementVersion === 'v1' ? 'var(--brand-blue)' : 'var(--text-secondary)',
+                            background: displayRefinementVersion === 'v1' ? 'rgba(59,130,246,0.15)' : 'transparent',
+                            border: displayRefinementVersion === 'v1' ? '1px solid rgba(59,130,246,0.4)' : '1px solid rgba(100,116,139,0.3)',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            marginBottom: '4px',
+                            fontWeight: displayRefinementVersion === 'v1' ? '600' : '500',
+                            transition: 'all 0.2s'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = 'rgba(59,130,246,0.1)';
+                            e.currentTarget.style.borderColor = 'rgba(59,130,246,0.4)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = displayRefinementVersion === 'v1' ? 'rgba(59,130,246,0.15)' : 'transparent';
+                            e.currentTarget.style.borderColor = displayRefinementVersion === 'v1' ? 'rgba(59,130,246,0.4)' : 'rgba(100,116,139,0.3)';
+                          }}
+                        >
+                          v1 原始版本
+                        </button>
+                        {hasV2Version && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDisplayRefinementVersion('v2');
+                              setShowRefinementVersionMenu(false);
+                            }}
+                            style={{
+                              display: 'block',
+                              width: '100%',
+                              textAlign: 'left',
+                              padding: '10px 12px',
+                              fontSize: '13px',
+                              color: displayRefinementVersion === 'v2' ? 'var(--brand-blue)' : 'var(--text-secondary)',
+                              background: displayRefinementVersion === 'v2' ? 'rgba(59,130,246,0.15)' : 'transparent',
+                              border: displayRefinementVersion === 'v2' ? '1px solid rgba(59,130,246,0.4)' : '1px solid rgba(100,116,139,0.3)',
+                              borderRadius: '6px',
+                              cursor: 'pointer',
+                              fontWeight: displayRefinementVersion === 'v2' ? '600' : '500',
+                              transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = 'rgba(59,130,246,0.1)';
+                              e.currentTarget.style.borderColor = 'rgba(59,130,246,0.4)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = displayRefinementVersion === 'v2' ? 'rgba(59,130,246,0.15)' : 'transparent';
+                              e.currentTarget.style.borderColor = displayRefinementVersion === 'v2' ? 'rgba(59,130,246,0.4)' : 'rgba(100,116,139,0.3)';
+                            }}
+                          >
+                            {displayVersion.refinement?.versionLabel}
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 {/* 细化内容显示 */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  <div>
-                    <h5 style={{ fontSize: '13px', fontWeight: '600', color: 'var(--brand-blue)', marginBottom: '8px', marginTop: 0 }}>
-                      标题
-                    </h5>
-                    <p style={{ fontSize: '14px', color: 'var(--text-primary)', lineHeight: '1.6', margin: 0 }}>
-                      {displayVersion.refinement.title}
-                    </p>
-                  </div>
+                  {/* 如果refinedExample包含HTML标签，则使用dangerouslySetInnerHTML渲染 */}
+                  {currentDisplayRefinement.refinedExample && /<[^>]*>/.test(currentDisplayRefinement.refinedExample) ? (
+                    <div
+                      style={{
+                        fontSize: '14px',
+                        color: 'var(--text-primary)',
+                        lineHeight: '1.6',
+                      }}
+                      dangerouslySetInnerHTML={{
+                        __html: currentDisplayRefinement.refinedExample
+                      }}
+                      className="refinement-html-content"
+                    />
+                  ) : (
+                    // 如果没有HTML标签，按原来的方式显示各个字段
+                    <>
+                      <div>
+                        <h5 style={{ fontSize: '13px', fontWeight: '600', color: 'var(--brand-blue)', marginBottom: '8px', marginTop: 0 }}>
+                          标题
+                        </h5>
+                        <p style={{ fontSize: '14px', color: 'var(--text-primary)', lineHeight: '1.6', margin: 0 }}>
+                          {currentDisplayRefinement.title}
+                        </p>
+                      </div>
 
-                  <div>
-                    <h5 style={{ fontSize: '13px', fontWeight: '600', color: 'var(--brand-blue)', marginBottom: '8px', marginTop: 0 }}>
-                      核心创意
-                    </h5>
-                    <p style={{ fontSize: '14px', color: 'var(--text-primary)', lineHeight: '1.6', margin: 0 }}>
-                      {displayVersion.refinement.refinedCoreIdea}
-                    </p>
-                  </div>
+                      <div>
+                        <h5 style={{ fontSize: '13px', fontWeight: '600', color: 'var(--brand-blue)', marginBottom: '8px', marginTop: 0 }}>
+                          核心创意
+                        </h5>
+                        <p style={{ fontSize: '14px', color: 'var(--text-primary)', lineHeight: '1.6', margin: 0 }}>
+                          {currentDisplayRefinement.refinedCoreIdea}
+                        </p>
+                      </div>
 
-                  <div>
-                    <h5 style={{ fontSize: '13px', fontWeight: '600', color: 'var(--brand-blue)', marginBottom: '8px', marginTop: 0 }}>
-                      最终表达示例
-                    </h5>
-                    <p style={{ fontSize: '14px', color: 'var(--text-primary)', lineHeight: '1.6', margin: 0, whiteSpace: 'pre-wrap' }}>
-                      {displayVersion.refinement.refinedExample}
-                    </p>
-                  </div>
+                      <div>
+                        <h5 style={{ fontSize: '13px', fontWeight: '600', color: 'var(--brand-blue)', marginBottom: '8px', marginTop: 0 }}>
+                          最终表达示例
+                        </h5>
+                        <p style={{ fontSize: '14px', color: 'var(--text-primary)', lineHeight: '1.6', margin: 0, whiteSpace: 'pre-wrap' }}>
+                          {currentDisplayRefinement.refinedExample}
+                        </p>
+                      </div>
 
-                  {displayVersion.refinement.alternatives && displayVersion.refinement.alternatives.length > 0 && (
-                    <div>
-                      <h5 style={{ fontSize: '13px', fontWeight: '600', color: 'var(--brand-blue)', marginBottom: '8px', marginTop: 0 }}>
-                        可选表达方式
-                      </h5>
-                      <ul style={{ margin: 0, paddingLeft: '20px' }}>
-                        {displayVersion.refinement.alternatives.map((alt, idx) => (
-                          <li key={idx} style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.6', marginBottom: '6px' }}>
-                            {alt}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
+                      {currentDisplayRefinement.alternatives && currentDisplayRefinement.alternatives.length > 0 && (
+                        <div>
+                          <h5 style={{ fontSize: '13px', fontWeight: '600', color: 'var(--brand-blue)', marginBottom: '8px', marginTop: 0 }}>
+                            可选表达方式
+                          </h5>
+                          <ul style={{ margin: 0, paddingLeft: '20px' }}>
+                            {currentDisplayRefinement.alternatives.map((alt, idx) => (
+                              <li key={idx} style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.6', marginBottom: '6px' }}>
+                                {alt}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      <div>
+                        <h5 style={{ fontSize: '13px', fontWeight: '600', color: 'var(--brand-blue)', marginBottom: '8px', marginTop: 0 }}>
+                          表达理由
+                        </h5>
+                        <p style={{ fontSize: '14px', color: 'var(--text-primary)', lineHeight: '1.6', margin: 0 }}>
+                          {currentDisplayRefinement.reasoning}
+                        </p>
+                      </div>
+                    </>
                   )}
-
-                  <div>
-                    <h5 style={{ fontSize: '13px', fontWeight: '600', color: 'var(--brand-blue)', marginBottom: '8px', marginTop: 0 }}>
-                      表达理由
-                    </h5>
-                    <p style={{ fontSize: '14px', color: 'var(--text-primary)', lineHeight: '1.6', margin: 0 }}>
-                      {displayVersion.refinement.reasoning}
-                    </p>
-                  </div>
                 </div>
 
-                {/* 细化展示区底部：下载和编辑按鑵 */}
-                <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid rgba(59, 130, 246, 0.15)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <button
-                    onClick={() => alert('下载为PDF功能开发中')}
-                    className="btn-secondary"
-                    disabled={isRefining}
-                    style={{ padding: '10px 16px', fontSize: '14px' }}
-                  >
-                    下载
-                  </button>
-                  <button
-                    onClick={() => alert('打开富文本编辑器功能开发中')}
-                    className="btn-secondary"
-                    disabled={isRefining}
-                    style={{ padding: '10px 16px', fontSize: '14px' }}
-                  >
-                    编辑
-                  </button>
+                {/* 细化展示区下部：下载和编辑按钮 */}
+                <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid rgba(59, 130, 246, 0.15)', display: 'grid', gridTemplateColumns: displayRefinementVersion === 'v2' && hasV2Version ? '1fr 1fr' : '1fr', gap: '12px', position: 'relative' }}>
+                  <div style={{ position: 'relative' }}>
+                    <button
+                      onClick={() => setShowDownloadMenu(!showDownloadMenu)}
+                      className="btn-secondary"
+                      disabled={isRefining || anyTaskRunning}
+                      style={{ padding: '10px 16px', fontSize: '14px', width: '100%', opacity: (isRefining || anyTaskRunning) ? 0.5 : 1 }}
+                    >
+                      下载
+                    </button>
+                                    
+                    {/* 下载菜单 */}
+                    {showDownloadMenu && (
+                      <>
+                        <div
+                          onClick={() => setShowDownloadMenu(false)}
+                          style={{
+                            position: 'fixed',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            zIndex: 998,
+                            background: 'transparent'
+                          }}
+                        />
+                        <div
+                          style={{
+                            position: 'absolute',
+                            bottom: '100%',
+                            left: 0,
+                            marginBottom: '8px',
+                            background: 'var(--bg-primary)',
+                            border: '1px solid var(--border-default)',
+                            borderRadius: '8px',
+                            padding: '8px',
+                            minWidth: '200px',
+                            boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+                            zIndex: 999
+                          }}
+                        >
+                          <button
+                            onClick={() => handleDownload('markdown')}
+                            style={{
+                              display: 'block',
+                              width: '100%',
+                              textAlign: 'left',
+                              padding: '10px 12px',
+                              fontSize: '14px',
+                              color: 'var(--text-primary)',
+                              background: 'transparent',
+                              border: 'none',
+                              borderRadius: '6px',
+                              cursor: 'pointer',
+                              marginBottom: '4px',
+                              transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = 'rgba(59,130,246,0.1)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = 'transparent';
+                            }}
+                          >
+                            📄 Markdown (.md)
+                          </button>
+                          <button
+                            onClick={() => handleDownload('docx')}
+                            style={{
+                              display: 'block',
+                              width: '100%',
+                              textAlign: 'left',
+                              padding: '10px 12px',
+                              fontSize: '14px',
+                              color: 'var(--text-primary)',
+                              background: 'transparent',
+                              border: 'none',
+                              borderRadius: '6px',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = 'rgba(59,130,246,0.1)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = 'transparent';
+                            }}
+                          >
+                            📕 Word (.docx)
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  {/* 编辑按钮：只在显示 v2 版本时显示 */}
+                  {displayRefinementVersion === 'v2' && hasV2Version && (
+                    <button
+                      onClick={handleEditClick}
+                      className="btn-secondary"
+                      disabled={isRefining || !displayVersion.refinement || anyTaskRunning}
+                      style={{ padding: '10px 16px', fontSize: '14px', opacity: (isRefining || !displayVersion.refinement || anyTaskRunning) ? 0.5 : 1 }}
+                    >
+                      编辑
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -685,14 +971,14 @@ const ProposalCard: React.FC<{
               </div>
             )}
 
-            {/* 操作按钮 */}
-            {!showOptimizer && (
+            {/* 操作按钮 - 仅在没有细化内容时显示 */}
+            {!showOptimizer && !displayVersion.refinement && (
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', paddingTop: '8px' }}>
                 <button 
                   onClick={handleOptimizeClick} 
-                  disabled={isProcessing || isExecuting || isRefining} 
+                  disabled={isProcessing || isExecuting || isRefining || anyFeedbackFormOpen || anyTaskRunning} 
                   className="btn-secondary"
-                  style={{ padding: '12px 24px', fontSize: '14px' }}
+                  style={{ padding: '12px 24px', fontSize: '14px', opacity: (isProcessing || isExecuting || isRefining || anyFeedbackFormOpen || anyTaskRunning) ? 0.5 : 1, cursor: (isProcessing || isExecuting || isRefining || anyFeedbackFormOpen || anyTaskRunning) ? 'not-allowed' : 'pointer' }}
                 >
                   <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -703,9 +989,9 @@ const ProposalCard: React.FC<{
                 </button>
                 <button 
                   onClick={handleRefineClick} 
-                  disabled={isProcessing || isExecuting || isRefining} 
+                  disabled={isProcessing || isExecuting || isRefining || anyFeedbackFormOpen || anyTaskRunning} 
                   className="btn-secondary"
-                  style={{ padding: '12px 24px', fontSize: '14px' }}
+                  style={{ padding: '12px 24px', fontSize: '14px', opacity: (isProcessing || isExecuting || isRefining || anyFeedbackFormOpen || anyTaskRunning) ? 0.5 : 1, cursor: (isProcessing || isExecuting || isRefining || anyFeedbackFormOpen || anyTaskRunning) ? 'not-allowed' : 'pointer' }}
                 >
                   {isRefining ? (
                     <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -728,6 +1014,61 @@ const ProposalCard: React.FC<{
           </>
       )}
     </div>
+    <style>{`
+      .refinement-html-content h1 {
+        font-size: 24px;
+        font-weight: 700;
+        margin: 24px 0 12px 0;
+        color: var(--text-primary);
+      }
+      
+      .refinement-html-content h2 {
+        font-size: 20px;
+        font-weight: 700;
+        margin: 20px 0 10px 0;
+        color: var(--text-primary);
+      }
+      
+      .refinement-html-content h3 {
+        font-size: 17px;
+        font-weight: 600;
+        margin: 16px 0 8px 0;
+        color: var(--text-primary);
+      }
+      
+      .refinement-html-content p {
+        margin: 10px 0;
+        color: var(--text-primary);
+        line-height: 1.6;
+      }
+      
+      .refinement-html-content ul, .refinement-html-content ol {
+        margin: 12px 0;
+        padding-left: 24px;
+        color: var(--text-primary);
+      }
+      
+      .refinement-html-content li {
+        margin: 6px 0;
+        color: var(--text-primary);
+        line-height: 1.6;
+      }
+      
+      .refinement-html-content strong {
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+      
+      .refinement-html-content em {
+        font-style: italic;
+        color: var(--text-primary);
+      }
+      
+      .refinement-html-content u {
+        text-decoration: underline;
+        color: var(--text-primary);
+      }
+    `}</style>
     </>
   );
 };
@@ -735,7 +1076,6 @@ const ProposalCard: React.FC<{
 interface ResultsViewProps {
   inspirations: InspirationCase[];
   proposals: CreativeProposal[];
-  onFinish: () => void;
   onOptimize: (proposal: CreativeProposal, feedback: string) => Promise<void>;
   onExecute: (proposal: CreativeProposal) => Promise<void>;
   onPromoteAndExecute: (currentProposal: CreativeProposal, versionToPromote: Omit<CreativeProposal, 'history'|'isFinalized'|'executionDetails'>) => Promise<void>;
@@ -745,11 +1085,18 @@ interface ResultsViewProps {
   isProcessing: boolean;
 }
 
-const ResultsView: React.FC<ResultsViewProps> = ({ inspirations, proposals, onFinish, onOptimize, onExecute, onPromoteAndExecute, onRefinementSave, creativeType = '创意', contextBrief = '', isProcessing }) => {
+const ResultsView: React.FC<ResultsViewProps> = ({ inspirations, proposals, onOptimize, onExecute, onPromoteAndExecute, onRefinementSave, creativeType = '创意', contextBrief = '', isProcessing }) => {
   const { t } = useLanguage();
   const [selectedInspirationIndex, setSelectedInspirationIndex] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState(0);
-  const [openVersionMenuId, setOpenVersionMenuId] = useState<string | null>(null); // 子元素控制芪版本菜单
+  const [openVersionMenuId, setOpenVersionMenuId] = useState<string | null>(null); // 子元素控制版本菜单
+  const [anyFeedbackFormOpen, setAnyFeedbackFormOpen] = useState(false); // 追踪是否有任何反馈表单打开
+  const [anyTaskRunning, setAnyTaskRunning] = useState(false); // 追踪是否有任何卡片在运行优化/细化任务
+  
+  // 全局编辑器状态
+  const [globalEditor, setGlobalEditor] = useState<{isOpen: false} | {isOpen: true; proposal: CreativeProposal; refinement: RefinementExpression}>({
+    isOpen: false
+  });
   
   // 每页展示 3 个案例
   const itemsPerPage = 3;
@@ -764,6 +1111,22 @@ const ResultsView: React.FC<ResultsViewProps> = ({ inspirations, proposals, onFi
   
   return (
     <>
+      {/* 全局富文本编辑器 */}
+      {globalEditor.isOpen && (
+        <RichTextEditor
+          refinement={globalEditor.refinement}
+          onClose={() => setGlobalEditor({ isOpen: false })}
+          onSave={async (refinement) => {
+            if (onRefinementSave) {
+              await onRefinementSave(globalEditor.proposal, refinement);
+            }
+            // 注意：仅执行保存，不关闭编辑器
+            // 编辑器仅有用户点击"完成编辑"才会关闭
+          }}
+          isProcessing={isProcessing}
+        />
+      )}
+      
       {selectedInspiration && (
         <InspirationDetail
           case={selectedInspiration}
@@ -983,26 +1346,16 @@ const ResultsView: React.FC<ResultsViewProps> = ({ inspirations, proposals, onFi
                 t={t}
                 openVersionMenuId={openVersionMenuId}
                 setOpenVersionMenuId={setOpenVersionMenuId}
+                anyFeedbackFormOpen={anyFeedbackFormOpen}
+                setAnyFeedbackFormOpen={setAnyFeedbackFormOpen}
+                anyTaskRunning={anyTaskRunning}
+                setAnyTaskRunning={setAnyTaskRunning}
+                onOpenEditor={(proposal, refinement) => setGlobalEditor({ isOpen: true, proposal, refinement })}
               />
             ))}
           </div>
         </div>
-        
-        {/* 完成按钮 */}
-        <div style={{ textAlign: 'center', paddingTop: '48px', paddingBottom: '32px' }}>
-          <button
-            onClick={onFinish}
-            className="btn-primary"
-            style={{ padding: '14px 48px', fontSize: '16px', minWidth: '240px' }}
-          >
-            <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M5 13L9 17L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-              <span>{t('completeAndSave')}</span>
-            </span>
-          </button>
-        </div>
+
       </div>
     </>
   );

@@ -2,6 +2,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 import type { RefinementData, InspirationCase, CreativeProposal, GeneratingStatus, CreativeType, ExecutionDetails, RefinementExpression } from '../types';
 import { handleError, validateBrief, logger, AppError, ErrorCodes } from '../utils/errors';
 import { withTimeoutAndRetry, isRetryableError } from '../utils/retry';
+import { cleanRefinementExpression } from '../utils/dataCleanup';
 
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
@@ -663,7 +664,8 @@ IMPORTANT:
     );
 
     logger.info('Creative expression refined successfully');
-    return result;
+    // 清理数据以确保所有字符串字段都是字符串
+    return cleanRefinementExpression(result);
 
   } catch (error) {
     logger.error("Error refining creative expression", error as Error);

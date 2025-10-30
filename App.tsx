@@ -27,6 +27,7 @@ import {
 } from './services/supabase';
 import { logger } from './utils/errors';
 import { refineBrief, generateCreativePackage, optimizeProposal, generateExecutionPlan } from './services/geminiService';
+import { cleanCreativeProposal, cleanProposalArray, cleanRefinementExpression } from './utils/dataCleanup';
 
   const App: React.FC = () => {
     const [stage, setStage] = useState<Stage>(Stage.LOGIN);
@@ -322,7 +323,8 @@ import { refineBrief, generateCreativePackage, optimizeProposal, generateExecuti
 
       try {
         const { inspirations, proposals } = await generateCreativePackage(fullBrief, currentRun.initialBrief.type, projectContext, setGeneratingStatus);
-        const proposalsWithIds: CreativeProposal[] = proposals.map(p => ({ 
+        const cleanedProposals = cleanProposalArray(proposals);
+        const proposalsWithIds: CreativeProposal[] = cleanedProposals.map(p => ({ 
             ...p, 
             id: crypto.randomUUID(),
             version: 1,
@@ -330,7 +332,18 @@ import { refineBrief, generateCreativePackage, optimizeProposal, generateExecuti
             isFinalized: false,
             executionDetails: null
         }));
-        setCurrentRun(prev => ({ ...prev, inspirations, proposals: proposalsWithIds }));
+        const updatedRun = { ...currentRun, inspirations, proposals: proposalsWithIds, refinedBriefText: fullBrief } as BriefHistoryItem;
+        setCurrentRun(updatedRun);
+        
+        // 自动保存初次的生成结果
+        try {
+          await autoSaveBrief(updatedRun);
+        } catch (saveError) {
+          // 一样失败也不中断流程，只记录错误
+          console.error('Failed to save initial generation:', saveError);
+          logger.error('Failed to save initial generation to storage', saveError as Error);
+        }
+        
         setStage(Stage.RESULTS);
       } catch(e) {
          console.error(e);
@@ -353,10 +366,11 @@ import { refineBrief, generateCreativePackage, optimizeProposal, generateExecuti
       setError(null);
       try {
         const optimizedData = await optimizeProposal(proposal, feedback, currentRun.refinedBriefText);
+        const cleanedOptimized = cleanCreativeProposal(optimizedData);
         // 保存旧版本，整个 history 应该一并保留
         const oldVersion = { ...proposal, history: proposal.history || [], isFinalized: false, executionDetails: null, refinement: undefined };
         const newProposal: CreativeProposal = {
-          ...optimizedData,
+          ...cleanedOptimized,
           id: proposal.id, // Keep same ID
           version: proposal.version + 1,
           history: [ ...(proposal.history || []), oldVersion ],
@@ -365,7 +379,17 @@ import { refineBrief, generateCreativePackage, optimizeProposal, generateExecuti
         };
 
         const updatedProposals = currentRun.proposals.map(p => p.id === proposal.id ? newProposal : p);
-        setCurrentRun(prev => ({...prev, proposals: updatedProposals}));
+        const updatedRun = {... currentRun, proposals: updatedProposals};
+        setCurrentRun(updatedRun);
+        
+        // 自动保存到 localStorage 和 Supabase
+        try {
+          await autoSaveBrief(updatedRun);
+        } catch (saveError) {
+          // 一杨失敗也不中断流程，只记录错误
+          console.error('Failed to save optimization:', saveError);
+          logger.error('Failed to save optimization to storage', saveError as Error);
+        }
       } catch(e) {
         console.error(e);
         setError('抱歉，优化方案时出错了，请重试。');
@@ -436,25 +460,47 @@ import { refineBrief, generateCreativePackage, optimizeProposal, generateExecuti
       }
     };
 
+    // ... existing code ...
     const handleSaveRefinement = async (proposal: CreativeProposal, refinement: any) => {
       if (!currentRun?.proposals) return;
 
       try {
         setIsLoading(true);
         
-        // 保存细化内容为新版本，整个 history 应该一并保留
-        const oldVersion = { ...proposal, history: proposal.history, isFinalized: false, executionDetails: null, refinement: undefined };
-        const newProposal: CreativeProposal = {
+        // 清理细化数据以确保所有字符串字段都是字符串
+        const cleanedRefinement = cleanRefinementExpression(refinement);
+        
+        // 判断是否需要备份v1版本
+        // 条件：还没有refinementV1，且：
+        // 1. 还没有refinement（首次生成），或
+        // 2. 当前refinement不是v2版本（表示这是v1原始版本）
+        const isFirstGeneration = !proposal.refinement;
+        let refinementV1 = proposal.refinementV1;
+        
+        if (!refinementV1) {
+          // 宜一次生成或绑定v1版本，池存一份次作为v1原始版本
+          refinementV1 = isFirstGeneration ? cleanedRefinement : proposal.refinement;
+        }
+        
+        // 保存细化内容到当前版本，不创建新版本
+        const updatedProposal: CreativeProposal = {
           ...proposal,
-          version: proposal.version + 1,
-          refinement: { ...refinement, isUserModified: true },
-          history: [ ...(proposal.history || []), oldVersion ],
-          isFinalized: false,
-          executionDetails: null,
+          refinement: { ...cleanedRefinement, isUserModified: isFirstGeneration ? false : true },
+          refinementV1: refinementV1,  // 保存或维持v1版本
         };
 
-        const updatedProposals = currentRun.proposals.map(p => p.id === proposal.id ? newProposal : p);
-        setCurrentRun(prev => ({...prev, proposals: updatedProposals}));
+        const updatedProposals = currentRun.proposals.map(p => p.id === proposal.id ? updatedProposal : p);
+        const updatedRun = {... currentRun, proposals: updatedProposals};
+        setCurrentRun(updatedRun);
+        
+        // 自动保存到 localStorage 和 Supabase
+        try {
+          await autoSaveBrief(updatedRun);
+        } catch (saveError) {
+          // 一杨失敗也不中断流程，只记录错误
+          console.error('Failed to save refinement:', saveError);
+          logger.error('Failed to save refinement to storage', saveError as Error);
+        }
       } catch(e) {
         console.error(e);
         setError('保存细化内容时出错，请重试。');
@@ -463,49 +509,46 @@ import { refineBrief, generateCreativePackage, optimizeProposal, generateExecuti
       }
     };
     
-    const handleFinish = async () => {
-      // 先保存项目ID返回信息（在状态更新前保存）
-      const shouldReturnToProject = !!returnToProjectId;
-      const projectIdToReturn = returnToProjectId;
+    // 自动保存函数
+    const autoSaveBrief = async (runData: Partial<BriefHistoryItem>) => {
+      if (!currentUser || !activeProjectId || !runData.id) return;
       
-      if (currentUser && activeProjectId && currentRun?.id && currentRun.initialBrief && currentRun.refinedBriefText && currentRun.proposals) {
-        const completeRun = currentRun as BriefHistoryItem;
-        
-        // 先保存到 Supabase（如果已登录）
-        let saveToSupabaseSuccess = false;
+      try {
+        // 保存到 Supabase（如果已登录）
         if (supabaseUser) {
           try {
             const { createBrief } = await import('./services/supabase');
             await createBrief({
               project_id: activeProjectId,
-              initial_brief: completeRun.initialBrief,
-              refined_brief_text: completeRun.refinedBriefText,
-              inspirations: completeRun.inspirations,
-              proposals: completeRun.proposals,
-              status: 'completed',
+              initial_brief: runData.initialBrief!,
+              refined_brief_text: runData.refinedBriefText!,
+              inspirations: runData.inspirations || [],
+              proposals: runData.proposals || [],
+              status: 'in_progress',
             });
-            logger.info('Brief saved to Supabase', { briefId: completeRun.id });
-            saveToSupabaseSuccess = true;
+            logger.info('Brief auto-saved to Supabase', { briefId: runData.id });
           } catch (supabaseError) {
-            logger.error('Failed to save brief to Supabase', supabaseError as Error);
+            logger.error('Failed to auto-save brief to Supabase', supabaseError as Error);
           }
         }
         
         // 同时保存到 localStorage（向后兼容）
         try {
-          const updatedUser = db.addOrUpdateBrief(currentUser.username, activeProjectId, completeRun);
-          setCurrentUser(updatedUser);
-        } catch (localStorageError: any) {
-          logger.error('Failed to save brief to localStorage', localStorageError);
-          // 即使 localStorage 也失败，但如果 Supabase 成功了也不需要报错
-          if (!saveToSupabaseSuccess) {
-            setError(`保存创意任务时出错。如果是 Supabase 上的项目，数据已保存到云端。`);
-          } else {
-            // Supabase 保存成功，不需要报错
-            logger.info('Brief saved to Supabase successfully, localStorage save skipped');
+          if (runData.initialBrief && runData.refinedBriefText && runData.proposals) {
+            db.addOrUpdateBrief(currentUser.username, activeProjectId, runData as BriefHistoryItem);
           }
+        } catch (localStorageError) {
+          logger.error('Failed to auto-save brief to localStorage', localStorageError as Error);
         }
+      } catch (error) {
+        logger.error('Error during auto-save', error as Error);
       }
+    };
+    
+    const handleFinish = async () => {
+      // 先保存项目ID返回信息（在状态更新前保存）
+      const shouldReturnToProject = !!returnToProjectId;
+      const projectIdToReturn = returnToProjectId;
       
       // 手动重置状态
       setActiveBriefId(null);
@@ -641,7 +684,6 @@ import { refineBrief, generateCreativePackage, optimizeProposal, generateExecuti
               <ResultsView 
                 inspirations={currentRun.inspirations} 
                 proposals={currentRun.proposals} 
-                onFinish={handleFinish} 
                 onOptimize={handleOptimizeProposal}
                 onExecute={handleFinalizeAndExecute}
                 onPromoteAndExecute={handlePromoteAndExecuteVersion}
