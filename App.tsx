@@ -262,9 +262,21 @@ import { cleanCreativeProposal, cleanProposalArray, cleanRefinementExpression } 
     };
 
     const handleDeleteBrief = (projectId: string, briefId: string) => {
-      if (currentUser) {
-         const updatedUser = db.deleteBrief(currentUser.username, projectId, briefId);
-         setCurrentUser(updatedUser);
+      try {
+        if (currentUser) {
+          // 只有当项目存在于本地用户对象时才删除本地数据
+          const projectExists = currentUser.projects.some(p => p.id === projectId);
+          if (projectExists) {
+            const updatedUser = db.deleteBrief(currentUser.username, projectId, briefId);
+            setCurrentUser(updatedUser);
+          } else {
+            // 项目不在本地（可能是从 Supabase 加载的），不删除本地数据
+            console.log('Project not in local database, skipping local deletion');
+          }
+        }
+      } catch (error) {
+        console.error('Failed to delete brief locally:', error);
+        // 不中断，Supabase 删除会在 ProjectDetails 中处理
       }
     };
     
@@ -664,15 +676,17 @@ import { cleanCreativeProposal, cleanProposalArray, cleanRefinementExpression } 
         case Stage.PROJECT_DASHBOARD:
           return currentUser && <ProjectDashboard user={currentUser} supabaseUser={supabaseUser} onCreateProject={handleCreateProject} onViewProject={handleViewProject} />;
         case Stage.PROJECT_DETAILS:
-          const project = currentUser?.projects.find(p => p.id === activeProjectId);
-          // If project not found in localStorage but we have activeProjectId, create a minimal project object
-          const projectToShow = project || (activeProjectId ? {
+          // 优先使用 activeProjectId 从当前用户的项目列表中查找
+          let project = currentUser?.projects.find(p => p.id === activeProjectId);
+          // 如果本地找不到但有 activeProjectId，创建最小项目对象
+          // ProjectDetails 会通过 useBriefs hook 从 Supabase 加载任务
+          const projectToDisplay = project || (activeProjectId ? {
             id: activeProjectId,
             name: '项目详情',
             briefs: [],
             createdAt: new Date().toISOString()
           } as Project : null);
-          return projectToShow && <ProjectDetails project={projectToShow} supabaseUser={supabaseUser} onStartNewBrief={handleStartNewBriefFromProject} onViewBrief={(b) => handleViewBriefResults(b, projectToShow.id)} onDeleteBrief={handleDeleteBrief} />;
+          return projectToDisplay && <ProjectDetails project={projectToDisplay} supabaseUser={supabaseUser} onStartNewBrief={handleStartNewBriefFromProject} onViewBrief={(b) => handleViewBriefResults(b, projectToDisplay.id)} onDeleteBrief={handleDeleteBrief} />;
         case Stage.BRIEF_REFINEMENT:
           return refinementData && currentRun?.initialBrief ? (
             <BriefRefinement brief={currentRun.initialBrief} refinementData={refinementData} onSubmit={handleRefinementSubmit} isLoading={isLoading} />
